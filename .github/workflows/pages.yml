@@ -21,7 +21,6 @@ jobs:
       run:
         working-directory: embuild-analyses
     env:
-      NODE_ENV: production
       NEXT_PUBLIC_BASE_PATH: /analyses
       NEXT_PUBLIC_DATA_BASE_URL: https://gehuybre.github.io/data
     steps:
