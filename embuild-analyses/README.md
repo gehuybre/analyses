@@ -55,6 +55,9 @@ python scripts/export_data_repo.py --clean
 
 Commit + push the `data` repo, and GitHub Pages will serve the new JSON.
 
+You can also use the GitHub Actions workflow:
+`Publish data repo` (requires `DATA_REPO_TOKEN` secret).
+
 ## Deploy on GitHub Pages
 
 This repo is configured for GitHub Pages via `.github/workflows/pages.yml`.
