@@ -1,0 +1,11 @@
+[
+  {
+    "id": "blog-a",
+    "title": "Blog A Title",
+    "url": "https://example.com/blog-a",
+    "summary": "Short description.",
+    "tags": ["data", "analysis"],
+    "updated_at": "2026-01-29",
+    "status": "active"
+  }
+]

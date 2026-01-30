@@ -1,0 +1,28 @@
+---
+title: Vergunningen voor woningen
+date: 2025-12-26
+summary: Analyse van de aanvragen voor vergunningen voor het bouwen, verbouwen of slopen van woningen in Vlaanderen, op basis van data uit het Omgevingsloket.
+tags: [vergunningen, bouw, woningen, nieuwbouw, renovatie, sloop]
+slug: vergunningen-aanvragen
+sourceProvider: Omgevingsloket Vlaanderen
+sourceTitle: Rapportering bouwen of verbouwen van woningen
+sourceUrl: https://omgevingsloketrapportering.omgeving.vlaanderen.be/wonen
+sourcePublicationDate: 2026-01-08
+---
+
+import { VergunningenDashboard } from "@/components/analyses/vergunningen-aanvragen/VergunningenDashboard"
+import { PressReferences } from "@/components/analyses/shared/PressReferences"
+
+Het Omgevingsloket Vlaanderen registreert alle vergunningsaanvragen voor woningen. Deze data biedt inzicht in drie belangrijke categorieën: nieuwbouw, verbouwingen en sloop.
+
+**Nieuwbouw** kende een piek in 2019 met bijna 74.000 aangevraagde wooneenheden, maar vertoont sindsdien een dalende trend. In 2024 werden circa 45.000 wooneenheden aangevraagd voor nieuwbouw - een daling van bijna 40% ten opzichte van de piek. Meergezinswoningen domineren de nieuwbouwmarkt qua aantal wooneenheden.
+
+**Verbouwingen** tonen een stabieler patroon. Het aantal verbouwprojecten steeg gestaag van 2018 tot 2021, en stabiliseerde daarna rond 22.000-23.000 projecten per jaar. Eengezinswoningen vormen het grootste aandeel bij renovaties.
+
+**Sloop** vertoont schommelingen maar blijft relatief stabiel rond 7-8 miljoen m² gesloopte oppervlakte per jaar. Het merendeel van de sloopvergunningen wordt behandeld op gemeentelijk niveau.
+
+De kwartaalcijfers tonen typische seizoenspatronen: Q4 piekt traditioneel door eindejaarsdossiers, terwijl Q1 doorgaans lager scoort.
+
+<VergunningenDashboard />
+
+<PressReferences slug="vergunningen-aanvragen" />

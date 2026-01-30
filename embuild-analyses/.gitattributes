@@ -1,0 +1,17 @@
+# Git LFS configuration for Data Blog
+
+# Large GeoJSON files (> 500 KB)
+embuild-analyses/public/maps/belgium_municipalities.json filter=lfs diff=lfs merge=lfs -text
+embuild-analyses/public/maps/belgium_provinces.json filter=lfs diff=lfs merge=lfs -text
+embuild-analyses/public/maps/belgium_arrondissements.json filter=lfs diff=lfs merge=lfs -text
+
+# Large data files (> 1 MB)
+embuild-analyses/public/data/**/*.json filter=lfs diff=lfs merge=lfs -text
+
+# Exclude small index files from LFS (keep in regular git)
+embuild-analyses/public/data/**/municipalities.json -filter -diff -merge
+embuild-analyses/public/data/**/*_index.json -filter -diff -merge
+embuild-analyses/public/data/**/yearly/year_*.json -filter -diff -merge
+
+# Keep small region map in git (< 100 KB)
+embuild-analyses/public/maps/belgium_regions.json -filter -diff -merge

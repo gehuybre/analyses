@@ -1,0 +1,484 @@
+"use client"
+
+import * as React from "react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+import { AnalysisSection } from "../shared/AnalysisSection"
+import { GeoProviderWithDefaults } from "../shared/GeoContext"
+import { PeriodComparisonSection, type PeriodComparisonRow } from "../shared/PeriodComparisonSection"
+import { getDataPath } from "@/lib/path-utils"
+import { normalizeNisCode } from "@/lib/nis-fusion-utils"
+import { aggregateMunicipalityToArrondissement } from "@/lib/map-utils"
+import { ARRONDISSEMENTS } from "@/lib/geo-utils"
+import { getAnalysisConstraints, applyDataConstraints } from "@/lib/embed-data-constraints"
+import { useEmbedFilters } from "@/lib/stores/embed-filters-store"
+
+// Data is now lazy-loaded from public/data/vergunningen-goedkeuringen/
+// Static imports replaced to reduce JavaScript bundle size by 3.8 MB
+
+type PeriodType = "year" | "quarter" | "month"
+
+type DataRow = {
+  y: number
+  q?: number
+  mo?: number
+  m: number | string
+  ren: number
+  dwell: number  // Total dwellings
+  apt: number    // Apartments
+  house: number  // Single houses
+}
+
+type MunicipalityData = {
+  code: number
+  name: string
+}
+
+export function VergunningenDashboard() {
+  const [quarterlyData, setQuarterlyData] = React.useState<DataRow[] | null>(null)
+  const [monthlyData, setMonthlyData] = React.useState<DataRow[] | null>(null)
+  const [yearlyData, setYearlyData] = React.useState<DataRow[] | null>(null)
+  const [municipalities, setMunicipalities] = React.useState<MunicipalityData[] | null>(null)
+  const [yearlyPeriods, setYearlyPeriods] = React.useState<number[] | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  // Sync filters to embed store for URL generation
+  const timeRange = useEmbedFilters((state) => state.timeRange)
+  const setTimeRangeStore = useEmbedFilters((state) => state.setTimeRange)
+  const nieuwbouwMetric = useEmbedFilters((state) => state.selectedCategory) as 'dwell' | 'apt' | 'house' | null
+  const setNieuwbouwMetricStore = useEmbedFilters((state) => state.setCategory)
+
+  // Convert timeRange to PeriodType for UI
+  const periodType: PeriodType =
+    timeRange === "monthly" ? "month" :
+    timeRange === "yearly" ? "year" :
+    "quarter"
+
+  // Initialize filters if not set
+  React.useEffect(() => {
+    if (!timeRange) {
+      setTimeRangeStore("quarterly")
+    }
+    if (!nieuwbouwMetric) {
+      setNieuwbouwMetricStore('dwell')
+    }
+  }, [timeRange, nieuwbouwMetric, setTimeRangeStore, setNieuwbouwMetricStore])
+
+  const setNieuwbouwMetric = React.useCallback((value: 'dwell' | 'apt' | 'house') => {
+    setNieuwbouwMetricStore(value)
+  }, [setNieuwbouwMetricStore])
+
+  const setPeriodType = React.useCallback((value: PeriodType) => {
+    setTimeRangeStore(value === "month" ? "monthly" : value === "year" ? "yearly" : "quarterly")
+  }, [setTimeRangeStore])
+
+  React.useEffect(() => {
+    let isMounted = true
+    const abortController = new AbortController()
+
+    async function loadData() {
+      try {
+        const [dataQuarterly, dataMonthly, municipalitiesData, yearlyIndex] = await Promise.all([
+          fetch(getDataPath("/data/vergunningen-goedkeuringen/data_quarterly.json"), { signal: abortController.signal }).then(r => r.json()),
+          fetch(getDataPath("/data/vergunningen-goedkeuringen/data_monthly.json"), { signal: abortController.signal }).then(r => r.json()).catch(() => null),
+          fetch(getDataPath("/data/vergunningen-goedkeuringen/municipalities.json"), { signal: abortController.signal }).then(r => r.json()),
+          fetch(getDataPath("/data/vergunningen-goedkeuringen/yearly_index.json"), { signal: abortController.signal }).then(r => r.json()).catch(() => null),
+        ])
+
+        if (!isMounted) return
+
+        // Normalize municipality codes and aggregate per period so the map
+        // receives post-fusion, zero-padded 5-digit NIS codes (see nis-fusion-utils)
+        // Aggregate counts when multiple pre-fusion codes map to the same current code
+        const aggregatedQuarter = new Map<string, { y: number; q: number; m: number; ren: number; dwell: number; apt: number; house: number }>()
+
+        for (const row of (dataQuarterly as DataRow[])) {
+          const normStr = normalizeNisCode(row.m) || String(row.m).padStart(5, "0")
+          const normNum = Number(normStr)
+          const key = `${row.y}-${row.q}|${normStr}`
+          const prev = aggregatedQuarter.get(key)
+          if (!prev) {
+            aggregatedQuarter.set(key, {
+              y: row.y, q: row.q!, m: normNum,
+              ren: Number(row.ren) || 0,
+              dwell: Number(row.dwell) || 0,
+              apt: Number(row.apt) || 0,
+              house: Number(row.house) || 0
+            })
+          } else {
+            prev.ren += Number(row.ren) || 0
+            prev.dwell += Number(row.dwell) || 0
+            prev.apt += Number(row.apt) || 0
+            prev.house += Number(row.house) || 0
+          }
+        }
+
+        const normalizedQuarterly = Array.from(aggregatedQuarter.values())
+
+        // Aggregate yearly data from the normalized quarterly records
+        const aggregatedYear = new Map<string, { y: number; m: number; ren: number; dwell: number; apt: number; house: number }>()
+        for (const row of normalizedQuarterly) {
+          const key = `${row.y}|${String(row.m).padStart(5, '0')}`
+          const prev = aggregatedYear.get(key)
+          if (!prev) {
+            aggregatedYear.set(key, {
+              y: row.y,
+              m: Number(String(row.m).padStart(5, '0')),
+              ren: Number(row.ren) || 0,
+              dwell: Number(row.dwell) || 0,
+              apt: Number(row.apt) || 0,
+              house: Number(row.house) || 0
+            })
+          } else {
+            prev.ren += Number(row.ren) || 0
+            prev.dwell += Number(row.dwell) || 0
+            prev.apt += Number(row.apt) || 0
+            prev.house += Number(row.house) || 0
+          }
+        }
+        const normalizedYearly = Array.from(aggregatedYear.values())
+
+        // Monthly data, if present
+        let normalizedMonthly: DataRow[] | null = null
+        if (dataMonthly) {
+          const aggregatedMonth = new Map<string, { y: number; mo: number; m: number; ren: number; dwell: number; apt: number; house: number }>()
+          for (const row of (dataMonthly as DataRow[])) {
+            const normStr = normalizeNisCode(row.m) || String(row.m).padStart(5, "0")
+            const normNum = Number(normStr)
+            const key = `${row.y}-${row.mo}|${normStr}`
+            const prev = aggregatedMonth.get(key)
+            if (!prev) {
+              aggregatedMonth.set(key, {
+                y: row.y, mo: row.mo!, m: normNum,
+                ren: Number(row.ren) || 0,
+                dwell: Number(row.dwell) || 0,
+                apt: Number(row.apt) || 0,
+                house: Number(row.house) || 0
+              })
+            } else {
+              prev.ren += Number(row.ren) || 0
+              prev.dwell += Number(row.dwell) || 0
+              prev.apt += Number(row.apt) || 0
+              prev.house += Number(row.house) || 0
+            }
+          }
+          normalizedMonthly = Array.from(aggregatedMonth.values())
+        }
+
+        // Keep municipalities list as-is (numbers). They will be matched via numeric NIS codes.
+        setQuarterlyData(normalizedQuarterly)
+        setYearlyData(normalizedYearly)
+        setMonthlyData(normalizedMonthly)
+        setMunicipalities(municipalitiesData)
+
+        // Prepare yearlyPeriods list (if available)
+        if (yearlyIndex && Array.isArray(yearlyIndex)) {
+          const yrs = yearlyIndex.map((e: any) => e.year).sort((a: number, b: number) => a - b)
+          setYearlyPeriods(yrs)
+        }
+
+        setLoading(false)
+      } catch (err) {
+        if (!isMounted) return
+        console.error("Failed to load vergunningen data:", err)
+        setError(err instanceof Error ? err.message : "Failed to load data")
+        setLoading(false)
+      }
+    }
+
+    loadData()
+
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
+  }, [])
+
+  // Helper to select the correct dataset based on a per-section period selection
+  // Uses centralized constraints to ensure consistency with embeds
+  const makeCurrentData = React.useCallback((pt: PeriodType) => {
+    let filtered = pt === "month" ? monthlyData :
+                   pt === "year" ? yearlyData :
+                   quarterlyData
+
+    // Apply centralized data constraints (defined in embed-data-constraints.ts)
+    // This ensures the main blog and embeds show the same date range
+    const constraints = getAnalysisConstraints("vergunningen-goedkeuringen")
+    if ((pt === "month" || pt === "quarter") && filtered && constraints?.minYear) {
+      filtered = applyDataConstraints(filtered, constraints)
+    }
+
+    return filtered ?? []
+  }, [quarterlyData, monthlyData, yearlyData])
+
+  const currentData = React.useMemo(() => makeCurrentData(periodType), [makeCurrentData, periodType])
+
+  const makePeriodConfig = React.useCallback((pt: PeriodType) => {
+    if (pt === "year") {
+      return {
+        key: (d: DataRow) => `${d.y}`,
+        sortValue: (d: DataRow) => d.y,
+        label: (d: DataRow) => `${d.y}`,
+        table: {
+          headers: ["Jaar"],
+          cells: (d: DataRow) => [d.y],
+        },
+      }
+    }
+
+    if (pt === "month") {
+      return {
+        key: (d: DataRow) => `${d.y}-${String(d.mo).padStart(2, "0")}`,
+        sortValue: (d: DataRow) => d.y * 100 + (d.mo || 0),
+        label: (d: DataRow) => `${d.y}-${String(d.mo).padStart(2, "0")}`,
+        table: {
+          headers: ["Jaar", "Maand"],
+          cells: (d: DataRow) => [d.y, String(d.mo).padStart(2, "0")],
+        },
+      }
+    }
+
+    // quarter (default)
+    return {
+      key: (d: DataRow) => `${d.y}-${d.q}`,
+      sortValue: (d: DataRow) => d.y * 10 + (d.q || 0),
+      label: (d: DataRow) => `${d.y} Q${d.q}`,
+      table: {
+        headers: ["Jaar", "Kwartaal"],
+        cells: (d: DataRow) => [d.y, `Q${d.q}`],
+      },
+    }
+  }, [])
+
+  const periodConfig = React.useMemo(() => makePeriodConfig(periodType), [makePeriodConfig, periodType])
+
+  // Helper function to calculate period comparison data
+  const calculatePeriodComparison = React.useCallback(
+    (data: DataRow[], metric: 'ren' | 'dwell' | 'apt' | 'house'): PeriodComparisonRow[] => {
+      // Filter Period 1: 2019 Q1 - 2021 Q4 (12 quarters)
+      const period1Data = data.filter(d =>
+        d.y >= 2019 && d.y <= 2021
+      )
+
+      // Filter Period 2: 2022 Q4 - 2025 Q3 (12 quarters)
+      const period2Data = data.filter(d =>
+        (d.y === 2022 && d.q === 4) ||
+        (d.y === 2023 || d.y === 2024) ||
+        (d.y === 2025 && d.q! <= 3)
+      )
+
+      // Aggregate to arrondissement level
+      const period1Agg = aggregateMunicipalityToArrondissement(
+        period1Data,
+        d => d.m,
+        d => Number(d[metric]) || 0
+      )
+
+      const period2Agg = aggregateMunicipalityToArrondissement(
+        period2Data,
+        d => d.m,
+        d => Number(d[metric]) || 0
+      )
+
+      // Build lookup maps
+      const period1Map = new Map(period1Agg.map(a => [a.arrondissementCode, a.value]))
+      const period2Map = new Map(period2Agg.map(a => [a.arrondissementCode, a.value]))
+
+      // Get all arrondissement codes from ARRONDISSEMENTS constant
+      const allArrCodes = ARRONDISSEMENTS.map(arr => arr.code)
+
+      // Build comparison rows
+      const comparisonRows: PeriodComparisonRow[] = []
+      for (const arrCode of allArrCodes) {
+        const p1 = period1Map.get(arrCode) || 0
+        const p2 = period2Map.get(arrCode) || 0
+
+        // Skip arrondissements with no data in both periods
+        if (p1 === 0 && p2 === 0) continue
+
+        const verschil = p2 - p1
+        const percentageChange = p1 === 0 ? (p2 > 0 ? Infinity : 0) : (verschil / p1) * 100
+
+        const arr = ARRONDISSEMENTS.find(a => a.code === arrCode)
+
+        comparisonRows.push({
+          arrondissementCode: arrCode,
+          arrondissementName: arr?.name || arrCode,
+          period1: p1,
+          period2: p2,
+          verschil,
+          percentageChange: Number.isFinite(percentageChange) ? percentageChange : 0
+        })
+      }
+
+      // Sort by name
+      return comparisonRows.sort((a, b) =>
+        a.arrondissementName.localeCompare(b.arrondissementName, 'nl-BE')
+      )
+    },
+    []
+  )
+
+  // Calculate period comparison data for renovatie and nieuwbouw
+  const renovatieComparisonData = React.useMemo(() =>
+    quarterlyData ? calculatePeriodComparison(quarterlyData, 'ren') : [],
+    [quarterlyData, calculatePeriodComparison]
+  )
+
+  const nieuwbouwComparisonData = React.useMemo(() =>
+    quarterlyData ? calculatePeriodComparison(quarterlyData, 'dwell') : [],
+    [quarterlyData, calculatePeriodComparison]
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">Data laden...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Require core datasets and municipalities for the dashboard to function
+  if (error || !municipalities || !quarterlyData || !yearlyData) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <p className="text-sm text-destructive mb-2">Fout bij het laden van de data</p>
+          {error && <p className="text-xs text-muted-foreground">{error}</p>}
+        </div>
+      </div>
+    )
+  }
+
+  // Get basePath for yearly map data
+  const yearlyPathTemplate = getDataPath("/data/vergunningen-goedkeuringen/yearly/year_{year}.json")
+
+  return (
+    <GeoProviderWithDefaults initialLevel="province" initialRegion="1000" initialProvince={null} initialMunicipality={null}>
+      <div className="space-y-8">
+        <AnalysisSection
+          title="Renovatie (gebouwen)"
+          data={currentData}
+          municipalities={municipalities}
+          metric="ren"
+          label="Aantal"
+          slug="vergunningen-goedkeuringen"
+          sectionId="renovatie"
+          dataSource="Statbel - Bouwvergunningen"
+          dataSourceUrl="https://statbel.fgov.be/nl/themas/bouwen-wonen/bouwvergunningen"
+          showMap={true}
+          mapGeoLevel="arrondissement"
+          period={periodConfig}
+          getMunicipalityCode={(d) => Number(d.m)}
+          mapYearlyPathTemplate={yearlyPathTemplate}
+          mapYearlyPeriods={yearlyPeriods ?? undefined}
+          periodControls={
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground hidden sm:inline">Periode:</span>
+              <Tabs value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
+                <TabsList className="h-9">
+                  <TabsTrigger value="year" className="text-xs px-3">Per jaar</TabsTrigger>
+                  <TabsTrigger value="quarter" className="text-xs px-3">Per kwartaal</TabsTrigger>
+                  {monthlyData && <TabsTrigger value="month" className="text-xs px-3">Per maand</TabsTrigger>}
+                </TabsList>
+              </Tabs>
+            </div>
+          }
+        />
+        {/* Nieuwbouw section */}
+        <div className="space-y-4">
+          <AnalysisSection
+            title={`Nieuwbouw (${
+              (nieuwbouwMetric || 'dwell') === 'dwell' ? 'woningen totaal' :
+              (nieuwbouwMetric || 'dwell') === 'apt' ? 'appartementen' :
+              'eengezinswoningen'
+            })`}
+            data={currentData}
+            municipalities={municipalities}
+            metric={(nieuwbouwMetric || 'dwell') as string}
+            label="Aantal"
+            slug="vergunningen-goedkeuringen"
+            sectionId={`nieuwbouw-${nieuwbouwMetric || 'dwell'}`}
+            dataSource="Statbel - Bouwvergunningen"
+            dataSourceUrl="https://statbel.fgov.be/nl/themas/bouwen-wonen/bouwvergunningen"
+            showMap={true}
+            mapGeoLevel="arrondissement"
+            period={periodConfig}
+            getMunicipalityCode={(d) => Number(d.m)}
+            mapYearlyPathTemplate={yearlyPathTemplate}
+            mapYearlyPeriods={yearlyPeriods ?? undefined}
+            tabsListClassName="flex-nowrap whitespace-nowrap"
+            rightControls={
+              <div className="flex items-center gap-3">
+                <Select value={nieuwbouwMetric || 'dwell'} onValueChange={(v) => setNieuwbouwMetric(v as 'dwell' | 'apt' | 'house')}>
+                  <SelectTrigger className="w-44 h-9 text-sm">
+                    <SelectValue>{(nieuwbouwMetric || 'dwell') === 'dwell' ? 'Woningen' : (nieuwbouwMetric || 'dwell') === 'apt' ? 'Appartementen' : 'Eengezinswoningen'}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dwell">Woningen</SelectItem>
+                    <SelectItem value="apt">Appartementen</SelectItem>
+                    <SelectItem value="house">Eengezinswoningen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            }
+            periodControls={
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-muted-foreground hidden sm:inline">Periode:</span>
+                <Tabs value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
+                  <TabsList className="h-9">
+                    <TabsTrigger value="year" className="text-xs px-3">Per jaar</TabsTrigger>
+                    <TabsTrigger value="quarter" className="text-xs px-3">Per kwartaal</TabsTrigger>
+                    {monthlyData && <TabsTrigger value="month" className="text-xs px-3">Per maand</TabsTrigger>}
+                  </TabsList>
+                </Tabs>
+              </div>
+            }
+          />
+        </div>
+
+        {/* Period Comparison Sections */}
+        <div className="space-y-8 mt-12 pt-12 border-t">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold">Periode vergelijking 2019-2021 vs 2022-2025</h2>
+            <p className="text-muted-foreground">
+              Vergelijking van twee periodes van 3 jaar: 2019 Q1 - 2021 Q4 (Periode 1) versus 2022 Q4 - 2025 Q3 (Periode 2)
+            </p>
+          </div>
+
+          {/* Renovatie Comparison */}
+          <PeriodComparisonSection
+            title="Renovatie - vergelijking 2019-2021 vs 2022-2025"
+            data={renovatieComparisonData}
+            metric="ren"
+            slug="vergunningen-goedkeuringen"
+            sectionId="renovatie-vergelijking"
+            period1Label="2019 Q1 - 2021 Q4"
+            period2Label="2022 Q4 - 2025 Q3"
+            mapColorScheme="orangeDecile"
+            mapColorScaleMode="negative"
+            mapNeutralFill="#ffffff"
+          />
+
+          {/* Nieuwbouw Comparison */}
+          <PeriodComparisonSection
+            title="Nieuwbouw - vergelijking 2019-2021 vs 2022-2025"
+            data={nieuwbouwComparisonData}
+            metric="dwell"
+            slug="vergunningen-goedkeuringen"
+            sectionId="nieuwbouw-vergelijking"
+            period1Label="2019 Q1 - 2021 Q4"
+            period2Label="2022 Q4 - 2025 Q3"
+            mapColorScheme="orangeDecile"
+            mapColorScaleMode="negative"
+            mapNeutralFill="#ffffff"
+          />
+        </div>
+      </div>
+    </GeoProviderWithDefaults>
+  )
+}

@@ -1,0 +1,15 @@
+{
+  "id": "{{BLOG_ID}}",
+  "title": "{{BLOG_TITLE}}",
+  "summary": "Short description.",
+  "tags": ["data", "analysis"],
+  "source_repo": "content-hub",
+  "build": {
+    "command": "npm run build:{{BLOG_ID}}",
+    "output_dir": "dist"
+  },
+  "urls": {
+    "public": "https://example.com/{{BLOG_ID}}",
+    "preview": "https://staging.example.com/{{BLOG_ID}}"
+  }
+}

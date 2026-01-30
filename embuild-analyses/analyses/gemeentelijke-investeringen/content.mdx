@@ -1,0 +1,45 @@
+---
+title: Gemeentelijke investeringen in Vlaanderen
+date: 2026-01-07
+summary: Analyse van geplande gemeentelijke investeringen in Vlaanderen per beleidsdomein en subdomein op basis van meerjarenplannen (2014-2033).
+tags: [gemeente, investeringen, financiën, beleidsdomein, meerjarenplan]
+slug: gemeentelijke-investeringen
+sourceProvider: Agentschap Binnenlands Bestuur
+sourceTitle: Gemeentelijke jaarrekeningen - BBC-DR data
+sourceUrl: https://lokaalbestuur.vlaanderen.be/financien/bbc-dr/gemeente-financien
+sourcePublicationDate: 2025-12-31
+---
+
+import { InvesteringenDashboard } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenDashboard"
+
+Deze analyse toont de **geplande gemeentelijke investeringen** in Vlaanderen op basis van de meerjarenplannen van Vlaamse gemeenten over **drie legislaturen** (2014-2019, 2020-2025, 2026-2031). De data is afkomstig van het Agentschap Binnenlands Bestuur en geeft inzicht in hoe gemeenten hun investeringsbudgetten plannen.
+
+## Over de data
+
+**Rapportjaren**: 2014, 2020 en 2026 (start van elke legislatuur)
+**Gemeenten**: 285 Vlaamse gemeenten
+**Data datum**: De data bevat meerjarenplannen zoals die werden opgesteld bij aanvang van elke legislatuur
+
+**Let op:** Dit zijn **planningscijfers** uit gemeentelijke meerjarenplannen, geen werkelijk gerealiseerde uitgaven. Meerjarenplannen worden opgesteld aan het begin van elke legislatuur en kunnen gedurende de legislatuur worden bijgestuurd.
+
+## Concrete investeringsprojecten
+
+Voor **concrete projectdetails** (projectnamen, beschrijvingen, planning), bekijk de analyse [Gemeentelijke Bouwprojecten Vlaanderen 2026-2031](/data-blog/analyses/bouwprojecten-gemeenten). Deze toont 6,368 doorzoekbare projecten uit de meerjarenplannen 2026-2031 (totaal €8.2 miljard).
+
+## De data wordt getoond volgens twee classificatiesystemen:
+
+### 1. Per beleidsdomein (BV)
+Investeringen ingedeeld volgens **wat** gemeenten doen - bijvoorbeeld mobiliteit, onderwijs, cultuur, of sport. Deze indeling toont de beleidsprioriteiten van gemeenten.
+
+De data bevat uitsluitend **materiële investeringen**. Dit betekent dat de analyse zich focust op investeringen in gebouwen, infrastructuur, onroerend erfgoed en toegestane investeringssubsidies. Financiële investeringen en immateriële investeringen zijn uitgesloten. De data toont budgettaire boekhouding volgens het meerjarenplan, met zowel de totale uitgaven als de uitgaven per inwoner voor alle Vlaamse gemeenten en OCMW's. Op deze manier krijg je een helder beeld van de geplande investeringen in de fysieke infrastructuur en het gebouwenpatrimonium van gemeenten.
+
+### 2. Per economische rekening (REK)
+Investeringen ingedeeld volgens **hoe** gemeenten investeren - materiële activa (gebouwen, infrastructuur), immateriële activa (software, intellectuele eigendom), of subsidies. Deze indeling toont de aard van de investeringen.
+
+## Hoe de data te interpreteren
+
+De investeringen worden getoond op twee manieren: totaal (de absolute geplande investeringen per gemeente) en per inwoner.
+
+Voor elke gemeente worden **drie datapunten** getoond: de geplande investeringen volgens het meerjarenplan van 2014, 2020 en 2026. Dit geeft inzicht in de evolutie van investeringsprioriteiten over drie legislaturen.
+
+<InvesteringenDashboard />

@@ -1,0 +1,74 @@
+---
+title: Faillissementen in de bouwsector
+date: 2023-11-01
+summary: Maandelijkse evolutie van faillissementen in de Belgische bouwsector, met vergelijking met andere sectoren en regionale spreiding.
+tags: [economie, bedrijven, bouw, faillissementen]
+slug: faillissementen
+sourceProvider: Statbel
+sourceTitle: Maandelijkse faillissementen per activiteitssector
+sourceUrl: https://statbel.fgov.be/nl/themas/ondernemingen/faillissementen/maandelijkse-faillissementen
+sourcePublicationDate: 22 januari 2026
+---
+
+import { FaillissementenDashboard } from "@/components/analyses/faillissementen/FaillissementenDashboard"
+import { PressReferences } from "@/components/analyses/shared/PressReferences"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
+
+Deze analyse toont de maandelijkse evolutie van faillissementen in België sinds 2015, met specifieke aandacht voor de bouwsector. De data komt van Statbel en wordt maandelijks bijgewerkt.
+
+## Belangrijkste bevindingen
+
+De meest recente cijfers (december 2025) tonen een zorgwekkende trend voor de bouwsector. In de Belgische bouwnijverheid vielen 255 faillissementen te noteren, het hoogste aantal ooit voor een maand december. Het vorige record stond op 236 faillissementen in december 2024. Deze faillissementen resulteerden in 451 verloren arbeidsplaatsen, het hoogste aantal sinds december 2017. De stijging bedraagt +8% ten opzichte van zowel november 2025 als december 2024.
+
+In Vlaanderen werden over alle sectoren heen 624 faillissementen geteld, de hoogste decemberwaarde sinds 2024 toen er 541 faillissementen waren. Het banenverlies liep op tot 1.491 arbeidsplaatsen, het hoogste aantal sinds december 2014. Vlaanderen concentreert hiermee 56,3% van alle Belgische faillissementen.
+
+Deze cijfers wijzen op structurele problemen in de bouwsector, met stijgingen ten opzichte van zowel de vorige maand als het vorige jaar. Kleine bouwbedrijven met 0 tot 4 werknemers blijven het meest kwetsbaar. De impact op de werkgelegenheid is aanzienlijk en groeiend.
+
+<Alert>
+  <AlertCircle className="h-4 w-4" />
+  <AlertTitle>Lees de cijfers met context</AlertTitle>
+  <AlertDescription>
+    Er is een vertraging tussen stopzetting van activiteiten en de faillietverklaring. De economische impact is daarom pas later zichtbaar in de cijfers. Zie de methodologie onderaan voor meer details over COVID-19 moratoria en steunmaatregelen.
+  </AlertDescription>
+</Alert>
+
+## Interactieve analyse
+
+Gebruik de dashboard hieronder om de cijfers te verkennen per sector, regio, provincie en periode.
+
+<FaillissementenDashboard />
+
+## Methodologie
+
+### Databronnen
+
+De faillissementsstatistieken komen van de Kruispuntbank van Ondernemingen (KBO) en het statistisch ondernemingsregister. Het banenverlies wordt bepaald op basis van de laatst bekende RSZ-gegevens op het moment van het faillissement.
+
+### Definities
+
+Een onderneming wordt als failliet beschouwd wanneer ze heeft opgehouden te betalen (schuldeisers worden niet meer betaald) en leningen zijn stopgezet (het vertrouwen van schuldeisers is verloren).
+
+Het banenverlies omvat voltijdbanen, deeltijdbanen en banen van loontrekkende werkgevers (geschat volgens de ESR 2010-verordening).
+
+### Belangrijke context bij interpretatie
+
+Er is een vertraging tussen het stopzetten van activiteiten en de officiële faillietverklaring door de rechtbank. De economische impact is daarom pas later zichtbaar in de cijfers.
+
+In juli en augustus vinden minder rechtbankzittingen plaats door het gerechtelijk zomerreces, wat leidt tot lagere faillissementscijfers in deze maanden.
+
+### COVID-19 en energiecrisis: impact op de cijfers
+
+De cijfers sinds 2020 werden sterk beïnvloed door verschillende overheidsmaatregelen. Er waren twee officiële faillissementsmoratoria: van 24 april tot 17 juni 2020 en van 1 november 2020 tot 31 januari 2021. Daarnaast was er een feitelijk moratorium omdat FOD Financiën en RSZ geen bedrijven dagvaardden tot respectievelijk maart 2022 (fiscus) en oktober 2021 (RSZ).
+
+De overheid introduceerde verschillende steunmaatregelen. De RSZ bood minnelijke afbetalingsplannen tot 24 maanden voor bijdragen 2020. Tijdelijke werkloosheid wegens overmacht werd toegestaan voor de coronacrisis tot 30 juni 2022. Voor de energiecrisis golden steunmaatregelen tot 31 maart 2023.
+
+In maart 2021 werd de toegang tot gerechtelijke reorganisatie hervormd. De documentvereisten werden vereenvoudigd van 11 naar 3 documenten, de publicatieplicht in het Belgisch Staatsblad verviel, en minnelijke schikkingen werden belastingvrij.
+
+Deze maatregelen hadden een dempend effect op het aantal faillissementen tussen maart 2020 en begin 2022. De stijging sinds 2022 weerspiegelt deels het wegvallen van deze steun.
+
+## In de pers
+
+Onderstaande krantenartikelen en persberichten bieden context bij de faillissementscijfers.
+
+<PressReferences slug="faillissementen" />

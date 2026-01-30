@@ -1,0 +1,48 @@
+---
+title: Prijsherzieningsindex I 2021
+date: 2024-12-28
+summary: Maandelijkse evolutie van de prijsherzieningsindex I 2021 voor de bouwsector, met calculator voor prijsherziening.
+tags: [bouw, prijzen, indexen, prijsherziening]
+slug: prijsherziening-index-i-2021
+sourceProvider: FOD Economie
+sourceTitle: Prijsherzieningsindexen - Mercuriale Index I 2021
+sourceUrl: https://economie.fgov.be/nl/themas/ondernemingen/specifieke-sectoren/bouw/prijsherzieningsindexen/mercuriale-index-i-2021
+sourcePublicationDate: 2025-01-30
+---
+
+import { PrijsherzieningDashboard } from "@/components/analyses/prijsherziening/PrijsherzieningDashboard"
+
+De prijsherzieningsindex I 2021 is een officiële index die wordt gebruikt om contractprijzen in de bouwsector aan te passen aan de evolutie van materiaal- en loonkosten. Deze index is vooral relevant voor langlopende bouwcontracten waarbij prijsschommelingen van grondstoffen en arbeid kunnen worden doorgerekend.
+
+**Databron**: FOD Economie - Laatst bijgewerkt januari 2025
+**Analyse update**: 28 december 2024
+
+## Waarvoor dient de index?
+
+Bij het afsluiten van een bouwcontract wordt vaak een prijsherzieningsclausule opgenomen. Deze clausule bepaalt dat de contractprijs kan worden aangepast op basis van de evolutie van bepaalde kostenelementen. De index I 2021 biedt hiervoor een objectieve maatstaf.
+
+De formule voor prijsherziening ziet er typisch als volgt uit:
+
+**P = P₀ × (0,40 × s/S + 0,40 × i/I + 0,20)**
+
+Waarbij:
+- **P** = herziene prijs
+- **P₀** = initiële contractprijs
+- **s/S** = verhouding tussen de loonindex op het moment van herziening (s) en bij aanvang (S)
+- **i/I** = verhouding tussen de materiaalprijsindex op het moment van herziening (i) en bij aanvang (I)
+- **0,40** = het aandeel lonen in de totale kostprijs
+- **0,40** = het aandeel materialen in de totale kostprijs
+- **0,20** = het vaste deel (niet onderhevig aan herziening)
+
+### Belangrijkste componenten
+
+De index I 2021 bestaat uit meerdere componenten die de evolutie van verschillende materialen en kostenelementen volgen:
+
+- **Diesel**: brandstofkosten
+- **Bitumen**: asfalt en wegenbouw
+- **Staal**: metaalconstructies en wapening
+- **Cement**: beton en metselwerk
+- **Hout**: timmerwerk en bekisting
+- **Lonen**: arbeidskosten in de bouwsector
+
+<PrijsherzieningDashboard />

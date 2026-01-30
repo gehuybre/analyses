@@ -1,0 +1,7 @@
+.DS_Store
+.venv/
+/embuild-analyses/analyses/**/data/
+/embuild-analyses/analyses/**/raw/
+/embuild-analyses/analyses/**/results/
+/embuild-analyses/public/data/
+/embuild-analyses/public/analyses/

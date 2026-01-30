@@ -1,0 +1,433 @@
+{
+  "hub_repo_path": "/Users/gerthuybrechts/pyprojects/data-blog",
+  "blogs_repo_path": "/Users/gerthuybrechts/pyprojects/data-blogs",
+  "blogs_repo_name": "data-blogs",
+  "templates": {
+    "hub": [
+      {
+        "from": "docs/migrations/blog-repo-split/templates/blogs.json",
+        "to": "data/blogs.json"
+      },
+      {
+        "from": "docs/migrations/blog-repo-split/templates/scripts/validate-blogs.js",
+        "to": "scripts/validate-blogs.js"
+      },
+      {
+        "from": "docs/migrations/blog-repo-split/templates/.github/workflows/validate-blogs.yml",
+        "to": ".github/workflows/validate-blogs.yml"
+      }
+    ],
+    "blogs": [
+      {
+        "from": "docs/migrations/blog-repo-split/templates/.github/workflows/build-blog.yml",
+        "to": ".github/workflows/build-blog.yml"
+      }
+    ],
+    "blog_template": "docs/migrations/blog-repo-split/templates/blog.json"
+  },
+  "shared": {
+    "mode": "submodule",
+    "repo_url": "git@github.com:YOUR_ORG/data-blog-shared.git",
+    "path": "shared",
+    "branch": "main",
+    "targets": [
+      "hub",
+      "blogs"
+    ],
+    "source_paths": [
+      "embuild-analyses/shared-data"
+    ]
+  },
+  "blog_subdirs": [
+    "content",
+    "data-sources",
+    "results",
+    "scripts",
+    "tests",
+    "assets",
+    "build"
+  ],
+  "blogs": [
+    {
+      "id": "arbeiders-bedienden",
+      "title": "Arbeiders en bedienden in de bouw",
+      "target_dir": "arbeiders-bedienden",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/arbeiders-bedienden/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/arbeiders-bedienden/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/arbeiders-bedienden/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/arbeiders-bedienden/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "bedrijventerreinen-vlaanderen",
+      "title": "Bezettingsgraad van bedrijventerreinen in Vlaanderen",
+      "target_dir": "bedrijventerreinen-vlaanderen",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/bedrijventerreinen-vlaanderen/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/bedrijventerreinen-vlaanderen/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/bedrijventerreinen-vlaanderen/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/bedrijventerreinen-vlaanderen/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "betaalbaar-arr",
+      "title": "Betaalbaar wonen per arrondissement",
+      "target_dir": "betaalbaar-arr",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/betaalbaar-arr/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/betaalbaar-arr/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/betaalbaar-arr/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/betaalbaar-arr/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "bouwondernemers",
+      "title": "Bouwondernemers",
+      "target_dir": "bouwondernemers",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/bouwondernemers/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwondernemers/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwondernemers/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwondernemers/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "bouwprojecten-gemeenten",
+      "title": "Gemeentelijke bouwprojecten Vlaanderen 2026-2031",
+      "target_dir": "bouwprojecten-gemeenten",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/src",
+          "to": "scripts"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/tests",
+          "to": "tests"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/check_categories.py",
+          "to": "scripts/check_categories.py"
+        },
+        {
+          "from": "embuild-analyses/analyses/bouwprojecten-gemeenten/verify_categories.py",
+          "to": "scripts/verify_categories.py"
+        }
+      ]
+    },
+    {
+      "id": "energiekaart-premies",
+      "title": "Energiepremies Vlaanderen",
+      "target_dir": "energiekaart-premies",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/energiekaart-premies/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/energiekaart-premies/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/energiekaart-premies/src",
+          "to": "scripts"
+        },
+        {
+          "from": "embuild-analyses/analyses/energiekaart-premies/update-energiekaart-premies-data.yml",
+          "to": "scripts/update-energiekaart-premies-data.yml"
+        },
+        {
+          "from": "embuild-analyses/analyses/energiekaart-premies/README.md",
+          "to": "README.md"
+        }
+      ]
+    },
+    {
+      "id": "faillissementen",
+      "title": "Faillissementen in de bouwsector",
+      "target_dir": "faillissementen",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/faillissementen/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/faillissementen/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/faillissementen/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/faillissementen/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "gebouwenpark",
+      "title": "Gebouwenpark 2025",
+      "target_dir": "gebouwenpark",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/gebouwenpark/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/gebouwenpark/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/gebouwenpark/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "gemeentelijke-investeringen",
+      "title": "Gemeentelijke investeringen in Vlaanderen",
+      "target_dir": "gemeentelijke-investeringen",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/gemeentelijke-investeringen/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/gemeentelijke-investeringen/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/gemeentelijke-investeringen/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/gemeentelijke-investeringen/src",
+          "to": "scripts"
+        },
+        {
+          "from": "embuild-analyses/analyses/gemeentelijke-investeringen/README.md",
+          "to": "README.md"
+        }
+      ]
+    },
+    {
+      "id": "huishoudensgroei",
+      "title": "Huishoudensgroei per gemeente",
+      "target_dir": "huishoudensgroei",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/huishoudensgroei/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/huishoudensgroei/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/huishoudensgroei/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "prijsherziening-index-i-2021",
+      "title": "Prijsherzieningsindex I 2021",
+      "target_dir": "prijsherziening-index-i-2021",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/prijsherziening-index-i-2021/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/prijsherziening-index-i-2021/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/prijsherziening-index-i-2021/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/prijsherziening-index-i-2021/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "silc-energie-2023",
+      "title": "SILC 2023: Energie-effici\u00ebntie van Huishoudens in Belgi\u00eb",
+      "target_dir": "silc-energie-2023",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/silc-energie-2023/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/silc-energie-2023/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/silc-energie-2023/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/silc-energie-2023/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "starters-stoppers",
+      "title": "Starters en stoppers",
+      "target_dir": "starters-stoppers",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/starters-stoppers/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/starters-stoppers/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/starters-stoppers/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/starters-stoppers/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "vastgoed-verkopen",
+      "title": "Verkoop van vastgoed in Belgi\u00eb",
+      "target_dir": "vastgoed-verkopen",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/vastgoed-verkopen/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/vastgoed-verkopen/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/vastgoed-verkopen/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/vastgoed-verkopen/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "vergunningen-aanvragen",
+      "title": "Vergunningen voor woningen",
+      "target_dir": "vergunningen-aanvragen",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/vergunningen-aanvragen/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/vergunningen-aanvragen/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/vergunningen-aanvragen/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/vergunningen-aanvragen/src",
+          "to": "scripts"
+        }
+      ]
+    },
+    {
+      "id": "vergunningen-goedkeuringen",
+      "title": "Vergunningen goedkeuringen",
+      "target_dir": "vergunningen-goedkeuringen",
+      "copy": [
+        {
+          "from": "embuild-analyses/analyses/vergunningen-goedkeuringen/content.mdx",
+          "to": "content/index.mdx"
+        },
+        {
+          "from": "embuild-analyses/analyses/vergunningen-goedkeuringen/data",
+          "to": "data-sources"
+        },
+        {
+          "from": "embuild-analyses/analyses/vergunningen-goedkeuringen/results",
+          "to": "results"
+        },
+        {
+          "from": "embuild-analyses/analyses/vergunningen-goedkeuringen/src",
+          "to": "scripts"
+        }
+      ]
+    }
+  ],
+  "shared_files": []
+}

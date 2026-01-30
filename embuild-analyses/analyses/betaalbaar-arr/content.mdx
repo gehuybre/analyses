@@ -1,0 +1,41 @@
+---
+title: "Betaalbaar wonen per arrondissement"
+date: 2026-01-18
+summary: "Analyse van woningbehoefte en aanbod per arrondissement: gebouwenpark, huishoudensgroei en bouwvergunningen in België"
+tags: [huisvesting, betaalbaarheid, arrondissement, demografie, bouwvergunningen]
+slug: betaalbaar-arr
+sourceProvider: "Statbel, Vlaamse Overheid"
+sourceTitle: "Gebouwenpark, Huishoudensprojecties, Bouwvergunningen"
+sourceUrl: "https://statbel.fgov.be/"
+sourcePublicationDate: 2025-01-01
+---
+
+import { BetaalbaarArrDashboard } from "@/components/analyses/betaalbaar-arr/BetaalbaarArrDashboard"
+import { PressReferences } from "@/components/analyses/shared/PressReferences"
+
+
+Deze analyse onderzoekt de betaalbaarheid van wonen op arrondissementsniveau door de huidige woningvoorraad te vergelijken met de verwachte huishoudensgroei en bouwactiviteit. Door deze drie dimensies samen te bekijken, kunnen we identificeren waar de druk op de woningmarkt het grootst is en waar er mogelijk betaalbaarheidsproblemen dreigen.
+
+## Waarom arrondissement-niveau?
+
+Arrondissementen bieden een nuttig analyseniveau tussen gemeenten en provincies in. Ze zijn groot genoeg om betekenisvolle trends te zien, maar klein genoeg om lokale verschillen te behouden.
+
+## Drie belangrijke indicatoren
+
+1. **Gebouwenpark**: De huidige woningvoorraad (huizen vs. appartementen)
+2. **Huishoudensgroei**: Verwachte toename van huishoudens 2025-2040 (enkel Vlaanderen)
+3. **Bouwvergunningen**: Nieuwbouw en renovatie de afgelopen jaren
+
+Door deze te combineren zien we waar vraag en aanbod uit balans zijn.
+
+<BetaalbaarArrDashboard />
+
+## Leeswijzer
+
+- **Gebouwenpark**: Bekijk de verdeling tussen huizen en appartementen
+- **Huishoudens**: Zie waar de grootste groei verwacht wordt (Vlaanderen)
+- **Vergunningen**: Vergelijk nieuwbouw en renovatie tussen periodes
+- **Correlaties**: Ontdek waar vraag en aanbod niet matchen (probleem zones in rood)
+- **Vergelijking**: Vergelijk alle arrondissementen direct met elkaar
+
+<PressReferences slug="betaalbaar-arr" />

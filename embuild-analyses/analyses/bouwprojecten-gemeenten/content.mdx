@@ -1,0 +1,46 @@
+---
+title: Gemeentelijke bouwprojecten Vlaanderen 2026-2031
+date: 2026-01-09
+summary: Doorzoekbare database van 11,095 concrete investeringsprojecten uit meerjarenplannen van Vlaamse gemeenten (totaal €16.0 miljard).
+tags: [gemeente, bouwprojecten, aannemers, investeringen, meerjarenplan]
+slug: bouwprojecten-gemeenten
+sourceProvider: Agentschap Binnenlands Bestuur
+sourceTitle: Gemeentelijke jaarrekeningen - BBC-DR data
+sourceUrl: https://lokaalbestuur.vlaanderen.be/financien/bbc-dr/gemeente-financien
+sourcePublicationDate: 2025-12-31
+---
+
+import { ProjectBrowser } from "@/components/analyses/bouwprojecten-gemeenten/ProjectBrowser"
+import { TopProjectsByCategory } from "@/components/analyses/bouwprojecten-gemeenten/TopProjectsByCategory"
+
+Deze analyse toont concrete investeringsprojecten uit de meerjarenplannen van Vlaamse gemeenten. Elk project bevat een beschrijving van het project en de geplande investeringsbedragen. Het detailniveau van de beschrijving kan verschillen van gemeente tot gemeente.
+
+**Dit zijn **planningscijfers** uit gemeentelijke meerjarenplannen die werden opgesteld aan het begin van de legislatuur 2026-2031. Deze plannen kunnen gedurende de legislatuur worden bijgestuurd.
+
+### Categorieën
+
+Projecten zijn automatisch ingedeeld in bouwsectoren op basis van projectbeschrijvingen:
+
+- **wegenbouw** (2,614 projecten) - wegen, straten, fietspaden, bruggen
+- **groen** (1,705 projecten) - parken, natuurgebieden, recreatie
+- **zorg** (1,335 projecten) - woonzorgcentra, rusthuizen, kinderopvang
+- **riolering** (846 projecten) - riolering, afvalwater, drainage
+- **cultuur** (826 projecten) - bibliotheken, gemeenschapscentra, musea
+- **sport** (620 projecten) - sportzalen, voetbalvelden, zwembaden
+- **scholenbouw** (526 projecten) - scholen, kleuterscholen, leslokalen
+- **verlichting** (465 projecten) - straatverlichting, verkeerslichten
+- **ruimtelijke ordening** (448 projecten) - herinrichting, gebiedsontwikkeling
+- **gebouwen** (304 projecten) - gemeentehuizen, administratieve centra
+- **overige** (4,684 projecten) - projecten die niet in bovenstaande categorieën passen
+
+## Projectbrowser
+
+<ProjectBrowser />
+
+## Top projecten per categorie
+
+<TopProjectsByCategory />
+
+## Relatie met geaggregeerde investeringsdata
+
+Deze analyse toont **concrete projectdetails** uit meerjarenplannen 2026-2031. Voor een overzicht van **geaggregeerde investeringstrends** over meerdere legislaturen (2014-2026) per beleidsdomein, zie de analyse [Gemeentelijke investeringen in Vlaanderen](/data-blog/analyses/gemeentelijke-investeringen).
