@@ -11,6 +11,12 @@ First, set the data base URL (local dev):
 echo "NEXT_PUBLIC_DATA_BASE_URL=https://gehuybre.github.io/data" > .env.local
 ```
 
+Install dependencies:
+
+```bash
+npm install --legacy-peer-deps
+```
+
 Then run the development server:
 
 ```bash
