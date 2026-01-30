@@ -26,7 +26,9 @@ export function getBasePath(): string {
  * Falls back to the app base path when not configured.
  */
 export function getDataBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_DATA_BASE_URL;
+  const envUrl = typeof process !== "undefined"
+    ? process.env.NEXT_PUBLIC_DATA_BASE_URL
+    : undefined;
   if (envUrl && envUrl.trim()) {
     return envUrl.replace(/\/+$/, '');
   }
