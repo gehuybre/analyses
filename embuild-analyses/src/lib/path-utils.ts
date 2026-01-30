@@ -36,6 +36,12 @@ export function getDataBaseUrl(): string {
   if (envUrl && envUrl.trim()) {
     return envUrl.replace(/\/+$/, '');
   }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "gehuybre.github.io") {
+      return `${window.location.origin.replace(/\/+$/, "")}/data`;
+    }
+  }
   return getBasePath();
 }
 
