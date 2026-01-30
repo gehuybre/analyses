@@ -6,7 +6,7 @@ import { scaleQuantile } from "d3-scale"
 import { geoBounds } from "d3-geo"
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getBasePath } from "@/lib/path-utils"
+import { getDataPath } from "@/lib/path-utils"
 import { isFlemishMunicipality } from "@/lib/geo-utils"
 import { TimeSlider } from "./TimeSlider"
 import { MapLegend, NoDataIndicator } from "./MapLegend"
@@ -87,8 +87,8 @@ interface MunicipalityMapProps<TData extends UnknownRecord = UnknownRecord> {
 }
 
 // GeoJSON URLs
-const MUNICIPALITIES_GEO_URL = `${getBasePath()}/maps/belgium_municipalities.json`
-const PROVINCES_GEO_URL = `${getBasePath()}/maps/belgium_provinces.json`
+const MUNICIPALITIES_GEO_URL = getDataPath("/maps/belgium_municipalities.json")
+const PROVINCES_GEO_URL = getDataPath("/maps/belgium_provinces.json")
 
 /**
  * Notes:

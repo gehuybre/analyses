@@ -1,4 +1,4 @@
-import { getBasePath } from "@/lib/path-utils"
+import { getDataPath } from "@/lib/path-utils"
 import {
   getArrondissementForMunicipality,
   getProvinceForMunicipality,
@@ -19,7 +19,7 @@ import {
 export async function loadMunicipalities(): Promise<
   Array<{ code: string; name: string }>
 > {
-  const geoUrl = `${getBasePath()}/maps/belgium_municipalities.json`
+  const geoUrl = getDataPath("/maps/belgium_municipalities.json")
 
   try {
     const response = await fetch(geoUrl)

@@ -15,7 +15,7 @@ import {
   groupPressByYear,
 } from "@/lib/press-utils"
 import type { PressReferencesData } from "@/lib/press-utils"
-import { getPublicPath } from "@/lib/path-utils"
+import { getDataPath } from "@/lib/path-utils"
 import { ExternalLink } from "lucide-react"
 
 interface PressReferencesProps {
@@ -55,7 +55,7 @@ export function PressReferences({
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    const url = getPublicPath(`/press-references/${slug}.json`)
+    const url = getDataPath(`/press-references/${slug}.json`)
 
     fetch(url)
       .then((res) => {

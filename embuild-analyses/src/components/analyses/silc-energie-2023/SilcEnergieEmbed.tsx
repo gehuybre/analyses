@@ -6,6 +6,7 @@ import { FilterableChart } from "@/components/analyses/shared/FilterableChart"
 import { FilterableTable } from "@/components/analyses/shared/FilterableTable"
 import { MunicipalityMap } from "@/components/analyses/shared/MunicipalityMap"
 import { expandGeoToMunicipalities, loadMunicipalities } from "@/lib/map-utils"
+import { getDataPath } from "@/lib/path-utils"
 import {
   type ProcessedData,
   SECTION_CONFIGS,
@@ -26,7 +27,7 @@ export function SilcEnergieEmbed({ section }: SilcEnergieEmbedProps) {
   useEffect(() => {
     Promise.all([
       loadMunicipalities(),
-      fetch('/analyses/silc-energie-2023/results/processed_data.json').then(res => res.json())
+      fetch(getDataPath("/analyses/silc-energie-2023/results/processed_data.json")).then(res => res.json())
     ]).then(([muns, data]) => {
       setMunicipalities(muns)
       if (validateProcessedData(data)) {

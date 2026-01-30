@@ -16,6 +16,8 @@ def collect_public_assets(source_root: Path) -> list[tuple[Path, Path, str]]:
     items: list[tuple[Path, Path, str]] = []
     public_data = source_root / "public" / "data"
     public_analyses = source_root / "public" / "analyses"
+    public_maps = source_root / "public" / "maps"
+    public_press = source_root / "public" / "press-references"
 
     for src in iter_files(public_data):
         rel = src.relative_to(public_data)
@@ -24,6 +26,14 @@ def collect_public_assets(source_root: Path) -> list[tuple[Path, Path, str]]:
     for src in iter_files(public_analyses):
         rel = src.relative_to(public_analyses)
         items.append((src, rel, "public/analyses"))
+
+    for src in iter_files(public_maps):
+        rel = src.relative_to(public_maps)
+        items.append((src, rel, "public/maps"))
+
+    for src in iter_files(public_press):
+        rel = src.relative_to(public_press)
+        items.append((src, rel, "public/press-references"))
 
     return items
 
@@ -113,6 +123,8 @@ def main() -> int:
     if args.clean:
         remove_stale(data_repo, "public/data", expected_public, args.dry_run)
         remove_stale(data_repo, "public/analyses", expected_public, args.dry_run)
+        remove_stale(data_repo, "public/maps", expected_public, args.dry_run)
+        remove_stale(data_repo, "public/press-references", expected_public, args.dry_run)
         remove_stale(data_repo, "analyses", expected_results, args.dry_run)
 
     print(f"Copied {len(public_items)} public files and {len(results_items)} result files.")

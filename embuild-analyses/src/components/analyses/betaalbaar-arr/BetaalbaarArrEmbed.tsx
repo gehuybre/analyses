@@ -7,7 +7,7 @@ import { HuishoudensSection } from "./HuishoudensSection"
 import { VergunningenSection } from "./VergunningenSection"
 import { CorrelatiesSection } from "./CorrelatiesSection"
 import { VergelijkingSection } from "./VergelijkingSection"
-import { getBasePath as getBlogBasePath } from "@/lib/path-utils"
+import { getDataPath } from "@/lib/path-utils"
 import Papa from "papaparse"
 import { useInitializeFiltersWithDefaults, useGeoFilters } from "@/lib/stores/embed-filters-store"
 
@@ -32,9 +32,8 @@ export function BetaalbaarArrEmbed({
   React.useEffect(() => {
     async function loadData() {
       try {
-        const basePath = getBlogBasePath()
-        const municipalitiesPath = `${basePath}/analyses/betaalbaar-arr/results/municipalities.csv`
-        const arrondissementsPath = `${basePath}/analyses/betaalbaar-arr/results/arrondissements.csv`
+        const municipalitiesPath = getDataPath("/analyses/betaalbaar-arr/results/municipalities.csv")
+        const arrondissementsPath = getDataPath("/analyses/betaalbaar-arr/results/arrondissements.csv")
         const [municipalitiesResponse, arrondissementsResponse] = await Promise.all([
           fetch(municipalitiesPath),
           fetch(arrondissementsPath),

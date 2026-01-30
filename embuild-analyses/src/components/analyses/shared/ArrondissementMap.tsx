@@ -6,7 +6,7 @@ import { scaleQuantile } from "d3-scale"
 import { geoBounds } from "d3-geo"
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getBasePath } from "@/lib/path-utils"
+import { getDataPath } from "@/lib/path-utils"
 import { isFlemishMunicipality, getArrondissementForMunicipality } from "@/lib/geo-utils"
 import { TimeSlider } from "./TimeSlider"
 import { MapLegend, NoDataIndicator } from "./MapLegend"
@@ -94,8 +94,8 @@ interface ArrondissementMapProps<TData extends UnknownRecord = UnknownRecord> {
 }
 
 // GeoJSON URLs
-const ARRONDISSEMENTS_GEO_URL = `${getBasePath()}/maps/belgium_arrondissements.json`
-const MUNICIPALITIES_GEO_URL = `${getBasePath()}/maps/belgium_municipalities.json`
+const ARRONDISSEMENTS_GEO_URL = getDataPath("/maps/belgium_arrondissements.json")
+const MUNICIPALITIES_GEO_URL = getDataPath("/maps/belgium_municipalities.json")
 
 // Default formatters
 const defaultFormatValue = (n: number) =>
