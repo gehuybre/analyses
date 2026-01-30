@@ -393,6 +393,7 @@ function MetricSection({
   selectedRegion,
   selectedProvince,
   selectedSector,
+  sectorOptions,
   onSelectRegion,
   onSelectProvince,
   onSelectSector,
@@ -414,6 +415,7 @@ function MetricSection({
   selectedRegion: RegionCode
   selectedProvince: ProvinceCode | null
   selectedSector: string | null
+  sectorOptions: Array<{ code: string; label: string }>
   onSelectRegion: (code: RegionCode) => void
   onSelectProvince: (code: ProvinceCode | null) => void
   onSelectSector: (code: string | null) => void
@@ -472,7 +474,7 @@ function MetricSection({
             <SectorFilterInline
               selected={selectedSector}
               onChange={onSelectSector}
-              options={naceMainOptions}
+              options={sectorOptions}
             />
             {stopHorizon !== undefined && onStopHorizonChange && (
               <Tabs
@@ -645,6 +647,7 @@ function InnerDashboard() {
         selectedRegion={selectedRegion}
         selectedProvince={selectedProvince}
         selectedSector={selectedNace1}
+        sectorOptions={naceMainOptions}
         onSelectRegion={selectRegion}
         onSelectProvince={selectProvince}
         onSelectSector={setSelectedNace1}
@@ -670,6 +673,7 @@ function InnerDashboard() {
         selectedRegion={selectedRegion}
         selectedProvince={selectedProvince}
         selectedSector={selectedNace1}
+        sectorOptions={naceMainOptions}
         onSelectRegion={selectRegion}
         onSelectProvince={selectProvince}
         onSelectSector={setSelectedNace1}
@@ -698,6 +702,7 @@ function InnerDashboard() {
         selectedRegion={selectedRegion}
         selectedProvince={selectedProvince}
         selectedSector={selectedNace1}
+        sectorOptions={naceMainOptions}
         onSelectRegion={selectRegion}
         onSelectProvince={selectProvince}
         onSelectSector={setSelectedNace1}

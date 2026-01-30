@@ -458,6 +458,9 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
 
   const dataWithoutGeoFilter = perspective === "bv" ? bvDataWithoutGeoFilter : rekDataWithoutGeoFilter
   const filteredData = perspective === "bv" ? filteredBVData : filteredREKData
+  const municipalityLookup = perspective === "bv"
+    ? bvLookups?.municipalities
+    : rekLookups?.municipalities
 
   // Chart data: Vlaanderen totals or municipality average
   const chartData = useMemo(() => {
@@ -540,7 +543,7 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
 
       if (!byMuni[record.NIS_code]) {
         byMuni[record.NIS_code] = {
-          municipality: getMunicipalityName(record.NIS_code, lookups?.municipalities),
+          municipality: getMunicipalityName(record.NIS_code, municipalityLookup),
           total: 0,
           count: 0
         }
@@ -633,7 +636,7 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
               </div>
               <SimpleGeoFilter
                 availableMunicipalities={availableMunicipalities}
-                municipalityLookup={lookups?.municipalities}
+                municipalityLookup={municipalityLookup}
               />
 
               {perspective === "bv" && (

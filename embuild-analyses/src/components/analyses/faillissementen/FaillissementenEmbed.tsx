@@ -709,7 +709,7 @@ function getSectorData(
   year: number,
   provinceCode: string | null
 ): Array<{ label: string; value: number; sector: string }> {
-  const sectors = (lookups as { sectors: Sector[] }).sectors ?? []
+  const sectors = (lookups?.sectors ?? []) as Sector[]
   const data = provinceCode
     ? (yearlyBySectorProvince as YearlySectorProvinceRow[])
         .filter((r) => r.y === year && r.p === provinceCode)
@@ -737,7 +737,7 @@ function getSectorDataForProvinces(
 ): Array<{ label: string; value: number; sector: string }> {
   // Brussels: calculate as total - provinces
   if (isBrussels) {
-    const sectors = (lookups as { sectors: Sector[] }).sectors ?? []
+    const sectors = (lookups?.sectors ?? []) as Sector[]
     const totals = (yearlyBySector as YearlySectorRow[]).filter((r) => r.y === year)
     const provinces = (yearlyBySectorProvince as YearlySectorProvinceRow[]).filter((r) => r.y === year)
 
@@ -764,7 +764,7 @@ function getSectorDataForProvinces(
     return getSectorData(year, null)
   }
 
-  const sectors = (lookups as { sectors: Sector[] }).sectors ?? []
+  const sectors = (lookups?.sectors ?? []) as Sector[]
   const rows = (yearlyBySectorProvince as YearlySectorProvinceRow[])
     .filter((r) => r.y === year && provinceCodes.includes(r.p))
 
@@ -840,7 +840,7 @@ export function FaillissementenEmbed({
     VALID_SECTOR_CODES = Array.from(
       new Set([
         "ALL",
-        ...((lookups?.sectors ?? []).map((s) => s.code)),
+        ...((lookups?.sectors ?? []) as Sector[]).map((s) => s.code),
       ])
     )
   }
