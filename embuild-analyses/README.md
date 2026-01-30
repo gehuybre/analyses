@@ -55,8 +55,13 @@ python scripts/export_data_repo.py --clean
 
 Commit + push the `data` repo, and GitHub Pages will serve the new JSON.
 
-## Deploy on Vercel (optional)
+## Deploy on GitHub Pages
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This repo is configured for GitHub Pages via `.github/workflows/pages.yml`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Steps:
+1) Enable Pages in the GitHub repo settings (Source: GitHub Actions).
+2) Push to `main` — the workflow will build and deploy automatically.
+
+The site will be available at:
+`https://gehuybre.github.io/analyses`

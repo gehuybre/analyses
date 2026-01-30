@@ -2,8 +2,8 @@ import { withContentlayer } from 'next-contentlayer'
 import path from 'node:path'
 
 const isProd = process.env.NODE_ENV === 'production';
-const repoName = 'data-blog';
-const basePath = isProd ? `/${repoName}` : '';
+const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+const basePath = isProd ? configuredBasePath : '';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,7 +11,7 @@ const nextConfig = {
   images: { unoptimized: true },
   trailingSlash: true,
   basePath,
-  assetPrefix: isProd ? `/${repoName}/` : '',
+  assetPrefix: isProd ? `${basePath}/` : '',
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
     NEXT_PUBLIC_DATA_BASE_URL: process.env.NEXT_PUBLIC_DATA_BASE_URL || '',
