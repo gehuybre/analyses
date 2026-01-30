@@ -1,8 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is the Embuild blog website (Next.js).
+
+Data is served from the separate `gehuybre/data` GitHub Pages repo and fetched at runtime via:
+`NEXT_PUBLIC_DATA_BASE_URL` (example: `https://gehuybre.github.io/data`).
 
 ## Getting Started
 
-First, run the development server:
+First, set the data base URL (local dev):
+
+```bash
+echo "NEXT_PUBLIC_DATA_BASE_URL=https://gehuybre.github.io/data" > .env.local
+```
+
+Then run the development server:
 
 ```bash
 npm run dev
@@ -29,7 +38,18 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Data updates
+
+Generate or update analysis results in the `analyses` repo, then export to the data repo:
+
+```bash
+cd ../
+python scripts/export_data_repo.py --clean
+```
+
+Commit + push the `data` repo, and GitHub Pages will serve the new JSON.
+
+## Deploy on Vercel (optional)
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
