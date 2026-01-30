@@ -1,5 +1,16 @@
 .DS_Store
 .venv/
+/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.log
+*.log.gz
+/logs/
+/out/
+/.pytest_cache/
+/.ruff_cache/
+/node_modules/
 /embuild-analyses/analyses/**/data/
 /embuild-analyses/analyses/**/raw/
 /embuild-analyses/analyses/**/results/
