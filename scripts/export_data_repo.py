@@ -21,14 +21,17 @@ def collect_public_assets(source_root: Path) -> list[tuple[Path, Path, str]]:
     for src in iter_files(public_data):
         rel = src.relative_to(public_data)
         items.append((src, rel, "data"))
+        items.append((src, rel, "docs/data"))
 
     for src in iter_files(public_maps):
         rel = src.relative_to(public_maps)
         items.append((src, rel, "maps"))
+        items.append((src, rel, "docs/maps"))
 
     for src in iter_files(public_press):
         rel = src.relative_to(public_press)
         items.append((src, rel, "press-references"))
+        items.append((src, rel, "docs/press-references"))
 
     return items
 
@@ -40,7 +43,9 @@ def collect_analysis_results(source_root: Path) -> list[tuple[Path, Path, str]]:
         parts = src.relative_to(analyses_root).parts
         if "results" not in parts:
             continue
-        items.append((src, src.relative_to(analyses_root), "analyses"))
+        rel = src.relative_to(analyses_root)
+        items.append((src, rel, "analyses"))
+        items.append((src, rel, "docs/analyses"))
     return items
 
 
@@ -119,6 +124,10 @@ def main() -> int:
         remove_stale(data_repo, "data", expected_public, args.dry_run)
         remove_stale(data_repo, "maps", expected_public, args.dry_run)
         remove_stale(data_repo, "press-references", expected_public, args.dry_run)
+        remove_stale(data_repo, "docs/data", expected_public, args.dry_run)
+        remove_stale(data_repo, "docs/maps", expected_public, args.dry_run)
+        remove_stale(data_repo, "docs/press-references", expected_public, args.dry_run)
+        remove_stale(data_repo, "docs/analyses", expected_results, args.dry_run)
         remove_stale(data_repo, "public", expected_public, args.dry_run)
         remove_stale(data_repo, "analyses", expected_results, args.dry_run)
 
