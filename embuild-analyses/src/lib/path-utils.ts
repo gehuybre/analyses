@@ -4,7 +4,7 @@
 
 /**
  * Get the base path for the application.
- * In production (GitHub Pages), this is '/data-blog'
+ * In production (GitHub Pages), this is '/analyses'
  * In development, this is ''
  *
  * This function computes the base path dynamically to handle both:
@@ -18,7 +18,13 @@ export function getBasePath(): string {
   }
 
   // Client-side: infer from current URL path
-  return window.location.pathname.startsWith('/data-blog') ? '/data-blog' : '';
+  if (window.location.pathname.startsWith('/analyses')) {
+    return '/analyses';
+  }
+  if (window.location.pathname.startsWith('/data-blog')) {
+    return '/data-blog';
+  }
+  return '';
 }
 
 /**
@@ -26,9 +32,7 @@ export function getBasePath(): string {
  * Falls back to the app base path when not configured.
  */
 export function getDataBaseUrl(): string {
-  const envUrl = typeof process !== "undefined"
-    ? process.env.NEXT_PUBLIC_DATA_BASE_URL
-    : undefined;
+  const envUrl = process.env.NEXT_PUBLIC_DATA_BASE_URL || "";
   if (envUrl && envUrl.trim()) {
     return envUrl.replace(/\/+$/, '');
   }
