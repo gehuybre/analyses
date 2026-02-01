@@ -12,7 +12,7 @@ import pandas as pd
 import json
 import re
 from pathlib import Path
-from category_keywords import classify_project, get_category_label, CATEGORY_DEFINITIONS, summarize_projects_by_category
+from category_keywords import classify_project, classify_project_by_policy_domain, get_category_label, CATEGORY_DEFINITIONS, summarize_projects_by_category
 
 # Directories
 SCRIPT_DIR = Path(__file__).parent
@@ -21,7 +21,7 @@ PUBLIC_DATA_DIR = SCRIPT_DIR.parent.parent.parent / 'public' / 'data' / 'bouwpro
 PUBLIC_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Input files
-INPUT_CSV = DATA_DIR / 'meerjarenplan projecten.csv'
+INPUT_CSV = DATA_DIR / 'data-54.csv'  # Primary data source with policy categorization
 PARQUET_FULL = SCRIPT_DIR.parent / 'results' / 'projects_2026_full.parquet'
 
 
@@ -85,6 +85,50 @@ def load_nis_lookups():
         nis_lookup[name] = nis_code
 
     return nis_lookup
+
+
+def load_policy_domain_data():
+    """
+    Load policy domain data from data-54.csv.
+
+    Creates a lookup mapping (municipality_name, actie_code) to policy domain.
+    This allows assigning categories based on actual policy domains instead of keywords.
+
+    Returns:
+        dict mapping (municipality_name, actie_code) -> (beleidsdomein, beleidssubdomein) tuple
+        or municipality_name -> list of (beleidsdomein, beleidssubdomein) tuples if no code match
+    """
+    policy_file = DATA_DIR / 'data-54.csv'
+
+    if not policy_file.exists():
+        print(f"Warning: Policy domain file not found at {policy_file}")
+        return {}
+
+    print(f"Loading policy domain data from {policy_file}")
+    policy_df = pd.read_csv(policy_file, sep=';', encoding='utf-8')
+
+    # Create lookup: (municipality, policy_domain) mappings
+    policy_lookup = {}
+
+    for _, row in policy_df.iterrows():
+        municipality = row.get('Bestuur', '').strip()
+        beleidsdomein = row.get('Beleidsdomein', '').strip()
+        beleidssubdomein = row.get('Beleidssubdomein', '').strip()
+
+        if not municipality or not beleidsdomein:
+            continue
+
+        # Store by municipality
+        if municipality not in policy_lookup:
+            policy_lookup[municipality] = []
+
+        # Add unique policy domain/subdomain pair
+        pair = (beleidsdomein, beleidssubdomein)
+        if pair not in policy_lookup[municipality]:
+            policy_lookup[municipality].append(pair)
+
+    print(f"Loaded policy data for {len(policy_lookup)} municipalities")
+    return policy_lookup
 
 
 def extract_code_description(text_block):
@@ -156,135 +200,120 @@ def parse_csv():
     return df
 
 
-def process_projects(df, nis_lookup):
-    """Process raw CSV data into structured project records."""
+def parse_dutch_number(value):
+    """Parse Dutch-formatted number (dots as thousands separator)."""
+    if pd.isna(value):
+        return 0
+    if isinstance(value, (int, float)):
+        return float(value)
+    # Remove dots (thousand separators) and handle potential commas
+    amount_str = str(value).strip().replace('.', '').replace(',', '.')
+    try:
+        return float(amount_str)
+    except:
+        return 0
+
+
+def process_projects(df, nis_lookup, policy_lookup=None):
+    """Process data-54.csv data into structured project records.
+
+    Data-54.csv contains individual investment line items with policy categorization.
+    Projects are aggregated by municipality + action code.
+
+    Args:
+        df: Input dataframe (data-54.csv)
+        nis_lookup: Dictionary mapping municipality names to NIS codes
+        policy_lookup: Not used when data-54.csv has inline policy data
+    """
     print("\n" + "="*60)
-    print("PROCESSING PROJECTS")
+    print("PROCESSING PROJECTS FROM DATA-54")
     print("="*60)
 
-    projects = []
+    projects_map = {}  # Group by municipality + action code
     skipped_no_municipality = 0
     skipped_no_nis = 0
-    skipped_no_amounts = 0
+    skipped_no_policy = 0
+    policy_classified = 0
 
     for idx, row in df.iterrows():
-        if idx % 500 == 0:
+        if idx % 5000 == 0:
             print(f"Processing record {idx}/{len(df)}...")
 
-        municipality_name = row['Bestuur']
-        if pd.isna(municipality_name) or not municipality_name.strip():
+        # Get NIS code directly from data-54.csv
+        nis_code = row.get('NIS-code')
+        if pd.isna(nis_code):
+            skipped_no_nis += 1
+            continue
+        nis_code = str(int(nis_code))
+
+        # Get municipality name (administrative body name)
+        municipality_name = row.get('Bestuur', '').strip()
+        if not municipality_name:
             skipped_no_municipality += 1
             continue
 
-        # Get NIS code
-        nis_code = nis_lookup.get(municipality_name.strip())
-        if not nis_code:
-            # Try without accents/special chars
-            skipped_no_nis += 1
+        # Extract policy domain (data-54 has this inline)
+        beleidsdomein = row.get('Beleidsdomein', '').strip()
+        beleidssubdomein = row.get('Beleidssubdomein', '').strip()
+
+        if not beleidsdomein:
+            skipped_no_policy += 1
             continue
 
-        # Extract Beleidsdoelstelling
-        bd_data = extract_code_description(row['Beleidsdoelst. totaaloverzicht'])
-
-        # Extract Actieplan
-        ap_data = extract_code_description(row['Actieplan totaaloverzicht'])
-
-        # Extract Actie (the actual project)
-        ac_data = extract_code_description(row['Actie totaaloverzicht'])
-
+        # Extract action details
+        ac_data = extract_code_description(row.get('Actie totaaloverzicht', ''))
         if not ac_data.get('code') or not ac_data.get('short'):
-            continue  # Skip if no valid action
-
-        # Parse yearly amounts
-        year_columns = [
-            ('2026,Uitgave', '2026,Uitgave per inwoner'),
-            ('2027,Uitgave', '2027,Uitgave per inwoner'),
-            ('2028,Uitgave', '2028,Uitgave per inwoner'),
-            ('2029,Uitgave', '2029,Uitgave per inwoner'),
-            ('2030,Uitgave', '2030,Uitgave per inwoner'),
-            ('2031,Uitgave', '2031,Uitgave per inwoner')
-        ]
-
-        yearly_amounts = {}
-        yearly_per_capita = {}
-        total_amount = 0
-        has_any_amount = False
-
-        for year, (total_col, per_capita_col) in zip(range(2026, 2032), year_columns):
-            year_str = str(year)
-
-            # Parse total amount
-            amount_val = row.get(total_col)
-            if pd.notna(amount_val):
-                # Handle both int/float and string formats
-                if isinstance(amount_val, (int, float)):
-                    amount = amount_val
-                else:
-                    # Remove dots (thousand separators) and replace comma with dot
-                    amount_str = str(amount_val).replace('.', '').replace(',', '.')
-                    try:
-                        amount = float(amount_str)
-                    except:
-                        amount = 0
-                yearly_amounts[year_str] = amount
-                total_amount += amount
-                if amount > 0:
-                    has_any_amount = True
-            else:
-                yearly_amounts[year_str] = 0
-
-            # Parse per capita amount
-            per_capita_val = row.get(per_capita_col)
-            if pd.notna(per_capita_val):
-                if isinstance(per_capita_val, (int, float)):
-                    per_capita = per_capita_val
-                else:
-                    per_capita_str = str(per_capita_val).replace('.', '').replace(',', '.')
-                    try:
-                        per_capita = float(per_capita_str)
-                    except:
-                        per_capita = 0
-                yearly_per_capita[year_str] = per_capita
-            else:
-                yearly_per_capita[year_str] = 0
-
-        # Skip projects with no budget
-        if not has_any_amount:
-            skipped_no_amounts += 1
             continue
 
-        # Calculate average per capita
-        avg_per_capita = sum(yearly_per_capita.values()) / 6 if yearly_per_capita else 0
+        # Parse amount
+        amount = parse_dutch_number(row.get('Uitgave', 0))
+        if amount <= 0:
+            continue
 
-        # Classify project into categories
-        ac_short = ac_data.get('short', '')
-        ac_long = ac_data.get('long', '')
-        categories = classify_project(ac_short, ac_long)
+        # Get fiscal year
+        fiscal_year = str(row.get('Boekjaar', 2026))
 
-        # Build project record
-        project = {
-            "municipality": municipality_name.strip(),
-            "nis_code": nis_code,
-            "bd_code": bd_data.get('code', ''),
-            "bd_short": bd_data.get('short', ''),
-            "bd_long": bd_data.get('long', ''),
-            "ap_code": ap_data.get('code', ''),
-            "ap_short": ap_data.get('short', ''),
-            "ap_long": ap_data.get('long', ''),
-            "ac_code": ac_data.get('code', ''),
-            "ac_short": ac_short,
-            "ac_long": ac_long,
-            "total_amount": round(total_amount, 2),
-            "amount_per_capita": round(avg_per_capita, 2),
-            "yearly_amounts": {k: round(v, 2) for k, v in yearly_amounts.items()},
-            "yearly_per_capita": {k: round(v, 2) for k, v in yearly_per_capita.items()},
-            "categories": categories
+        # Create project key: municipality + action code
+        ac_code = ac_data.get('code', '')
+        project_key = f"{municipality_name}|{ac_code}"
+
+        # Classify using policy domain (preferred method)
+        categories = classify_project_by_policy_domain(beleidsdomein, beleidssubdomein)
+        policy_classified += 1
+
+        # Initialize or update project
+        if project_key not in projects_map:
+            projects_map[project_key] = {
+                "municipality": municipality_name,
+                "nis_code": nis_code,
+                "ac_code": ac_code,
+                "ac_short": ac_data.get('short', ''),
+                "ac_long": ac_data.get('long', ''),
+                "beleidsdomein": beleidsdomein,
+                "beleidssubdomein": beleidssubdomein,
+                "categories": categories,
+                "total_amount": 0,
+                "yearly_amounts": {}
+            }
+
+        # Accumulate amount
+        projects_map[project_key]["total_amount"] += amount
+        projects_map[project_key]["yearly_amounts"][fiscal_year] = \
+            projects_map[project_key]["yearly_amounts"].get(fiscal_year, 0) + amount
+
+    # Convert to list and calculate per-capita
+    projects = []
+    for project_data in projects_map.values():
+        # Round amounts
+        project_data["total_amount"] = round(project_data["total_amount"], 2)
+        project_data["yearly_amounts"] = {
+            k: round(v, 2) for k, v in project_data["yearly_amounts"].items()
         }
+        projects.append(project_data)
 
-        projects.append(project)
-
-    print(f"\nProcessed {len(projects)} valid projects")
-    print(f"Skipped: {skipped_no_municipality} (no municipality), {skipped_no_nis} (no NIS code), {skipped_no_amounts} (no amounts)")
+    print(f"\nProcessed {len(projects)} unique projects")
+    print(f"  - Policy-based classification: {policy_classified}")
+    print(f"Skipped: {skipped_no_municipality} (no municipality), {skipped_no_nis} (no NIS), {skipped_no_policy} (no policy domain)")
 
     return projects
 
@@ -437,6 +466,10 @@ def main():
     nis_lookup = load_nis_lookups()
     print(f"Loaded {len(nis_lookup)} municipalities")
 
+    # Load policy domain data
+    print("\nLoading policy domain data...")
+    policy_lookup = load_policy_domain_data()
+
     # Load input: prefer parquet snapshot when available
     is_processed, data = load_input_dataframe()
 
@@ -446,7 +479,7 @@ def main():
     else:
         # Raw CSV dataframe - run full processing
         df = data
-        projects = process_projects(df, nis_lookup)
+        projects = process_projects(df, nis_lookup, policy_lookup)
 
     # Chunk and save (will write updated metadata including per-category summaries)
     chunk_and_save(projects)

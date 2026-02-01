@@ -45,7 +45,11 @@ export function ProjectBrowser() {
 
   const loadMetadata = async () => {
     try {
-      const response = await fetch(getDataPath("/data/bouwprojecten-gemeenten/projects_metadata.json"))
+      // Add cache buster to force fresh data (use current timestamp)
+      const cacheBuster = new Date().getTime()
+      const response = await fetch(getDataPath(`/data/bouwprojecten-gemeenten/projects_metadata.json?t=${cacheBuster}`), {
+        cache: 'no-store'
+      })
       if (!response.ok) throw new Error("Failed to load metadata")
       const data = await response.json()
       setMetadata(data)
@@ -68,9 +72,10 @@ export function ProjectBrowser() {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
 
+        const cacheBuster = new Date().getTime()
         const response = await fetch(
-          getDataPath(`/data/bouwprojecten-gemeenten/projects_2026_chunk_${chunkIndex}.json`),
-          { signal: controller.signal }
+          getDataPath(`/data/bouwprojecten-gemeenten/projects_2026_chunk_${chunkIndex}.json?t=${cacheBuster}`),
+          { signal: controller.signal, cache: 'no-store' }
         )
         clearTimeout(timeoutId)
 
