@@ -66,7 +66,7 @@ NIS_FILE = SHARED_DATA_DIR / 'nis' / 'refnis.csv'
 
 
 def load_nis_lookups():
-    """Load NIS municipality lookups."""
+    """Load NIS municipality lookups (both directions)."""
     nis_df = pd.read_csv(NIS_FILE, encoding='utf-8')
 
     # Filter for Flemish municipalities (NIS codes starting with 1, 2, 3, 4, 7)
@@ -75,16 +75,19 @@ def load_nis_lookups():
         (nis_df['CD_REFNIS'].astype(str).str[0].isin(['1', '2', '3', '4', '7']))
     ].copy()
 
-    # Create lookup dictionary
-    nis_lookup = {}
+    # Create lookup dictionaries
+    name_to_nis = {}  # municipality name -> NIS code
+    nis_to_name = {}  # NIS code -> municipality name
+
     for _, row in municipalities.iterrows():
         nis_code = str(row['CD_REFNIS'])
         name = row['TX_REFNIS_NL'].strip()
         if '(' in name:
             name = name.split('(')[0].strip()
-        nis_lookup[name] = nis_code
+        name_to_nis[name] = nis_code
+        nis_to_name[nis_code] = name
 
-    return nis_lookup
+    return name_to_nis, nis_to_name
 
 
 def load_policy_domain_data():
@@ -214,7 +217,7 @@ def parse_dutch_number(value):
         return 0
 
 
-def process_projects(df, nis_lookup, policy_lookup=None):
+def process_projects(df, nis_lookups, policy_lookup=None):
     """Process data-54.csv data into structured project records.
 
     Data-54.csv contains individual investment line items with policy categorization.
@@ -222,13 +225,14 @@ def process_projects(df, nis_lookup, policy_lookup=None):
 
     Args:
         df: Input dataframe (data-54.csv)
-        nis_lookup: Dictionary mapping municipality names to NIS codes
+        nis_lookups: Tuple of (name_to_nis, nis_to_name) dictionaries
         policy_lookup: Not used when data-54.csv has inline policy data
     """
     print("\n" + "="*60)
     print("PROCESSING PROJECTS FROM DATA-54")
     print("="*60)
 
+    name_to_nis, nis_to_name = nis_lookups
     projects_map = {}  # Group by municipality + action code
     skipped_no_municipality = 0
     skipped_no_nis = 0
@@ -246,8 +250,8 @@ def process_projects(df, nis_lookup, policy_lookup=None):
             continue
         nis_code = str(int(nis_code))
 
-        # Get municipality name (administrative body name)
-        municipality_name = row.get('Bestuur', '').strip()
+        # Get municipality name from NIS code (correct, authoritative source)
+        municipality_name = nis_to_name.get(nis_code)
         if not municipality_name:
             skipped_no_municipality += 1
             continue
@@ -463,8 +467,8 @@ def main():
 
     # Load NIS lookups
     print("\nLoading NIS municipality lookups...")
-    nis_lookup = load_nis_lookups()
-    print(f"Loaded {len(nis_lookup)} municipalities")
+    nis_lookups = load_nis_lookups()
+    print(f"Loaded {len(nis_lookups[0])} municipalities")
 
     # Load policy domain data
     print("\nLoading policy domain data...")
@@ -479,7 +483,7 @@ def main():
     else:
         # Raw CSV dataframe - run full processing
         df = data
-        projects = process_projects(df, nis_lookup, policy_lookup)
+        projects = process_projects(df, nis_lookups, policy_lookup)
 
     # Chunk and save (will write updated metadata including per-category summaries)
     chunk_and_save(projects)

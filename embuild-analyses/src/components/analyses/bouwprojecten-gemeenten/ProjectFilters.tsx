@@ -45,10 +45,12 @@ export function ProjectFiltersComponent({
   const [searchInput, setSearchInput] = useState("")
   const [muniOpen, setMuniOpen] = useState(false)
 
-  // Get unique municipalities from loaded projects
+  // Get unique municipalities with NIS codes from loaded projects
   const municipalities = useMemo(() => {
-    const unique = Array.from(new Set(projects.map(p => p.municipality)))
-    return unique.sort()
+    const unique = Array.from(new Set(
+      projects.map(p => JSON.stringify({ nis_code: p.nis_code, name: p.municipality }))
+    )).map(str => JSON.parse(str) as { nis_code: string; name: string })
+    return unique.sort((a, b) => a.name.localeCompare(b.name))
   }, [projects])
 
   // Calculate project counts per category for the selected municipality
@@ -62,9 +64,9 @@ export function ProjectFiltersComponent({
       })
     }
 
-    // Filter projects by municipality if one is selected
-    const relevantProjects = filters.municipality
-      ? projects.filter(p => p.municipality === filters.municipality)
+    // Filter projects by NIS code if one is selected
+    const relevantProjects = filters.nis_code
+      ? projects.filter(p => p.nis_code === filters.nis_code)
       : projects
 
     // Count categories in relevant projects
@@ -77,14 +79,14 @@ export function ProjectFiltersComponent({
     })
 
     return counts
-  }, [projects, filters.municipality, metadata])
+  }, [projects, filters.nis_code, metadata])
 
   const handleMunicipalityChange = (value: string) => {
     if (value === "all") {
-      const { municipality, ...rest } = filters
+      const { nis_code, ...rest } = filters
       setFilters(rest)
     } else {
-      setFilters({ ...filters, municipality: value })
+      setFilters({ ...filters, nis_code: value })
     }
   }
 
@@ -120,7 +122,7 @@ export function ProjectFiltersComponent({
   }
 
   const hasActiveFilters =
-    filters.municipality ||
+    filters.nis_code ||
     (filters.categories && filters.categories.length > 0) ||
     filters.searchQuery
 
@@ -149,7 +151,9 @@ export function ProjectFiltersComponent({
                 className="w-full justify-between font-normal"
                 id="municipality"
               >
-                {filters.municipality || "alle gemeenten"}
+                {filters.nis_code
+                  ? municipalities.find(m => m.nis_code === filters.nis_code)?.name
+                  : "alle gemeenten"}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -169,15 +173,15 @@ export function ProjectFiltersComponent({
                       <Check
                         className={cn(
                           "mr-2 h-4 w-4",
-                          !filters.municipality ? "opacity-100" : "opacity-0"
+                          !filters.nis_code ? "opacity-100" : "opacity-0"
                         )}
                       />
                       Alle gemeenten
                     </CommandItem>
                     {municipalities.map((muni) => (
                       <CommandItem
-                        key={muni}
-                        value={muni}
+                        key={muni.nis_code}
+                        value={muni.nis_code}
                         onSelect={(currentValue) => {
                           handleMunicipalityChange(currentValue)
                           setMuniOpen(false)
@@ -186,10 +190,10 @@ export function ProjectFiltersComponent({
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4",
-                            filters.municipality === muni ? "opacity-100" : "opacity-0"
+                            filters.nis_code === muni.nis_code ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        {muni}
+                        {muni.name}
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -255,13 +259,13 @@ export function ProjectFiltersComponent({
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground mb-2">actieve filters:</p>
           <div className="flex flex-wrap gap-2">
-            {filters.municipality && (
+            {filters.nis_code && (
               <Badge variant="secondary">
-                Gemeente: {filters.municipality}
+                Gemeente: {municipalities.find(m => m.nis_code === filters.nis_code)?.name}
                 <X
                   className="ml-1 h-3 w-3 cursor-pointer"
                   onClick={() => {
-                    const { municipality, ...rest } = filters
+                    const { nis_code, ...rest } = filters
                     setFilters(rest)
                   }}
                 />

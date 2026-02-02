@@ -62,7 +62,7 @@ export interface ProjectMetadata {
 }
 
 export interface ProjectFilters {
-  municipality?: string
+  nis_code?: string
   categories?: string[]
   searchQuery?: string
 }

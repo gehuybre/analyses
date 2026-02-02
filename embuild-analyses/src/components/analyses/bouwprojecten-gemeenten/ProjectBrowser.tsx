@@ -133,9 +133,9 @@ export function ProjectBrowser() {
   const filteredAndSortedProjects = useMemo(() => {
     let filtered = projects
 
-    // Apply municipality filter
-    if (filters.municipality) {
-      filtered = filtered.filter(p => p.municipality === filters.municipality)
+    // Apply NIS code filter
+    if (filters.nis_code) {
+      filtered = filtered.filter(p => p.nis_code === filters.nis_code)
     }
 
     // Apply category filter
@@ -179,7 +179,7 @@ export function ProjectBrowser() {
   }, [filteredAndSortedProjects])
 
   const hasActiveFilters =
-    filters.municipality ||
+    filters.nis_code ||
     (filters.categories && filters.categories.length > 0) ||
     filters.searchQuery
 
