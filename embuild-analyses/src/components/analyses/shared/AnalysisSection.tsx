@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FilterableChart } from "./FilterableChart"
+import { FilterableChart, type ChartType } from "./FilterableChart"
 import { FilterableTable } from "./FilterableTable"
 import { ExportButtons } from "./ExportButtons"
 import { GeoFilterInline } from "./GeoFilterInline"
@@ -57,6 +57,16 @@ interface AnalysisSectionProps<TData extends UnknownRecord = UnknownRecord> {
   periodControls?: React.ReactNode
   /** Optional class name for the view tabs list */
   tabsListClassName?: string
+  /** Chart type to render (composed, line, bar, area) */
+  chartType?: ChartType
+  /** Whether to show moving average overlay on chart */
+  showMovingAverage?: boolean
+  /** Whether to show province boundaries on map */
+  showProvinceBoundaries?: boolean
+  /** Color scheme for map (default: "blue") */
+  mapColorScheme?: "blue" | "orange" | "orangeDecile" | "green" | "purple" | "red"
+  /** Color scale mode for map (default: "positive") */
+  mapColorScaleMode?: "positive" | "negative" | "all"
 } 
 
 type AggregatedPoint = {
@@ -86,6 +96,11 @@ export function AnalysisSection<TData extends UnknownRecord = UnknownRecord>({
   rightControls,
   periodControls,
   tabsListClassName,
+  chartType = 'composed',
+  showMovingAverage = true,
+  showProvinceBoundaries = true,
+  mapColorScheme = "blue",
+  mapColorScaleMode = "positive",
 }: AnalysisSectionProps<TData>) {
   const {
     setLevel,
@@ -316,7 +331,12 @@ export function AnalysisSection<TData extends UnknownRecord = UnknownRecord>({
               <CardTitle>Evolutie {title}</CardTitle>
             </CardHeader>
             <CardContent>
-              <FilterableChart data={chartData} yAxisLabelAbove={label ?? "Aantal"} />
+              <FilterableChart
+                data={chartData}
+                yAxisLabelAbove={label ?? "Aantal"}
+                chartType={chartType}
+                showMovingAverage={showMovingAverage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -341,9 +361,10 @@ export function AnalysisSection<TData extends UnknownRecord = UnknownRecord>({
               showTimeSlider={periods.length > 1}
               formatValue={(v) => new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 }).format(v)}
               tooltipLabel={label}
-              showProvinceBoundaries={true}
+              showProvinceBoundaries={showProvinceBoundaries}
               geoLevel={mapGeoLevel}
-              colorScheme="blue"
+              colorScheme={mapColorScheme}
+              colorScaleMode={mapColorScaleMode}
               height={500}
               yearlyDataPathTemplate={mapYearlyPathTemplate}
               yearlyPeriods={mapYearlyPeriods}

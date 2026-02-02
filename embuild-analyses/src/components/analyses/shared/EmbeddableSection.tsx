@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import { FilterableChart } from "./FilterableChart"
 import { FilterableTable } from "./FilterableTable"
 import { MapSection } from "./MapSection"
-import { Municipality } from "@/lib/geo-utils"
+import { Municipality, getProvinceForMunicipality, getArrondissementForMunicipality, PROVINCES } from "@/lib/geo-utils"
 import { getEmbedConfig } from "@/lib/embed-config"
 import { getDataPath } from "@/lib/path-utils"
 
@@ -42,6 +42,16 @@ interface EmbeddableSectionProps<TData extends object = UnknownRecord> {
   getMetricValue?: (d: TData, metric: string) => number
   period?: PeriodConfig<TData>
   timeRange?: string | null
+  geoLevel?: string | null
+  selectedRegion?: string | null
+  selectedProvince?: string | null
+  selectedArrondissement?: string | null
+  selectedMunicipality?: string | null
+  chartType?: string | null
+  showMovingAverage?: boolean
+  showProvinceBoundaries?: boolean
+  colorScheme?: "blue" | "orange" | "orangeDecile" | "green" | "purple" | "red"
+  colorScaleMode?: "positive" | "negative" | "all"
 }
 
 export function EmbeddableSection<TData extends object = UnknownRecord>({
@@ -57,6 +67,16 @@ export function EmbeddableSection<TData extends object = UnknownRecord>({
   getMetricValue,
   period,
   timeRange,
+  geoLevel,
+  selectedRegion,
+  selectedProvince,
+  selectedArrondissement,
+  selectedMunicipality,
+  chartType,
+  showMovingAverage,
+  showProvinceBoundaries,
+  colorScheme = "blue",
+  colorScaleMode = "positive",
 }: EmbeddableSectionProps<TData>) {
   const municipalityCodeGetter =
     getMunicipalityCode ?? ((d: unknown) => Number((d as Record<string, unknown>)?.m))
@@ -156,10 +176,43 @@ export function EmbeddableSection<TData extends object = UnknownRecord>({
     console.log('  effectiveTimeRange:', effectiveTimeRange)
     console.log('  dataLength:', data.length)
     console.log('  metric:', metric)
+    console.log('  geoFilters:', { selectedRegion, selectedProvince, selectedArrondissement, selectedMunicipality })
     console.log('  firstDataRow:', data[0])
 
+    // Filter hierarchically: municipality > arrondissement > province > region
+    let filtered = data
+
+    if (selectedMunicipality) {
+      // Filter by specific municipality
+      filtered = data.filter((d) => municipalityCodeGetter(d) === Number(selectedMunicipality))
+    } else if (selectedArrondissement) {
+      // Filter by arrondissement
+      filtered = data.filter((d) => {
+        const munCode = municipalityCodeGetter(d)
+        const arrCode = getArrondissementForMunicipality(munCode)
+        return arrCode === selectedArrondissement
+      })
+    } else if (selectedProvince) {
+      // Filter by province
+      filtered = data.filter((d) => {
+        const province = getProvinceForMunicipality(municipalityCodeGetter(d))
+        return province ? province === selectedProvince : false
+      })
+    } else if (selectedRegion && selectedRegion !== '1000') {
+      // Filter by region (only if not Belgium)
+      filtered = data.filter((d) => {
+        const munCode = municipalityCodeGetter(d)
+        const province = getProvinceForMunicipality(munCode)
+        if (!province) return false
+        const prov = PROVINCES.find(p => p.code === province)
+        return prov?.regionCode === selectedRegion
+      })
+    }
+
+    console.log('  filteredLength:', filtered.length)
+
     const agg = new Map<string, AggregatedPoint>()
-    data.forEach((d) => {
+    filtered.forEach((d) => {
       const key = periodKeyGetter(d)
       const prev = agg.get(key)
       const inc = metricGetter(d, metric)
@@ -182,7 +235,22 @@ export function EmbeddableSection<TData extends object = UnknownRecord>({
     console.log('  last3:', result.slice(-3))
 
     return result
-  }, [data, metric, periodKeyGetter, periodSortGetter, periodLabelGetter, periodTable, metricGetter, timeRange, effectiveTimeRange])
+  }, [
+    data,
+    metric,
+    periodKeyGetter,
+    periodSortGetter,
+    periodLabelGetter,
+    periodTable,
+    metricGetter,
+    timeRange,
+    effectiveTimeRange,
+    selectedRegion,
+    selectedProvince,
+    selectedArrondissement,
+    selectedMunicipality,
+    municipalityCodeGetter,
+  ])
 
   const formatInt = useMemo(() => {
     return (n: number) => new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 }).format(n)
@@ -207,7 +275,11 @@ export function EmbeddableSection<TData extends object = UnknownRecord>({
 
       {viewType === "chart" && (
         <div className="w-full">
-          <FilterableChart data={chartData} />
+          <FilterableChart
+            data={chartData}
+            chartType={chartType as any}
+            showMovingAverage={showMovingAverage}
+          />
         </div>
       )}
 
@@ -224,9 +296,11 @@ export function EmbeddableSection<TData extends object = UnknownRecord>({
           showTimeSlider={false}
           tooltipLabel={title}
           formatValue={formatInt}
-          showProvinceBoundaries={true}
+          showProvinceBoundaries={showProvinceBoundaries ?? true}
           height={500}
-          geoLevel={mapGeoLevel}
+          geoLevel={(geoLevel as any) ?? mapGeoLevel}
+          colorScheme={colorScheme}
+          colorScaleMode={colorScaleMode}
           yearlyDataPathTemplate={mapYearlyPathTemplate}
           yearlyPeriods={mapYearlyPeriods}
           showSearch={false}

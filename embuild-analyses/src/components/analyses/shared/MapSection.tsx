@@ -52,7 +52,10 @@ interface MapSectionProps<TData extends UnknownRecord = UnknownRecord> {
   height?: number
 
   /** Color scheme */
-  colorScheme?: "blue" | "green" | "orange" | "purple" | "red"
+  colorScheme?: "blue" | "orange" | "orangeDecile" | "green" | "purple" | "red"
+
+  /** Color scale mode */
+  colorScaleMode?: "positive" | "negative" | "all"
 
   /** Show province boundaries as overlay */
   showProvinceBoundaries?: boolean
@@ -113,6 +116,7 @@ export function MapSection<TData extends UnknownRecord = UnknownRecord>({
   tooltipLabel,
   height = 500,
   colorScheme = "blue",
+  colorScaleMode = "positive",
   showProvinceBoundaries = true,
   geoLevel = "municipality",
   className,
@@ -258,6 +262,7 @@ export function MapSection<TData extends UnknownRecord = UnknownRecord>({
                 tooltipLabel={tooltipLabel}
                 height={height}
                 colorScheme={colorScheme}
+                colorScaleMode={colorScaleMode}
                 showMunicipalityBoundaries={false}
               />
             )

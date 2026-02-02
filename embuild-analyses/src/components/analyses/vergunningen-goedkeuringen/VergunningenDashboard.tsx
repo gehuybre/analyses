@@ -43,6 +43,27 @@ type PeriodLabels = {
   period2End: { y: number; q: number }
 }
 
+// Period configuration: 35 months per period
+const PERIOD1_START_YEAR = 2019
+const PERIOD_MONTHS = 35
+
+/**
+ * Convert year and quarter to a comparable month number (0-based)
+ * E.g., 2019 Q1 = 0, 2019 Q2 = 3, 2020 Q1 = 12, etc.
+ */
+function yearQuarterToMonths(year: number, quarter: number = 1): number {
+  return (year - PERIOD1_START_YEAR) * 12 + (quarter - 1) * 3
+}
+
+/**
+ * Convert month number back to year and quarter
+ */
+function monthsToYearQuarter(months: number): { year: number; quarter: number } {
+  const year = PERIOD1_START_YEAR + Math.floor(months / 12)
+  const quarter = Math.floor((months % 12) / 3) + 1
+  return { year, quarter: Math.min(quarter, 4) }
+}
+
 export function VergunningenDashboard() {
   // Initialize filters from URL with analysis-specific defaults
   useInitializeFiltersWithDefaults('vergunningen-goedkeuringen')
@@ -61,6 +82,14 @@ export function VergunningenDashboard() {
   const setTimeRangeStore = useEmbedFilters((state) => state.setTimeRange)
   const nieuwbouwMetric = useEmbedFilters((state) => state.selectedCategory) as 'dwell' | 'apt' | 'house' | null
   const setNieuwbouwMetricStore = useEmbedFilters((state) => state.setCategory)
+
+  // Chart display filters
+  const currentChartType = useEmbedFilters((state) => state.currentChartType)
+  const setChartType = useEmbedFilters((state) => state.setChartType)
+  const showMovingAverage = useEmbedFilters((state) => state.showMovingAverage)
+  const toggleMovingAverage = useEmbedFilters((state) => state.toggleMovingAverage)
+  const showProvinceBoundaries = useEmbedFilters((state) => state.showProvinceBoundaries)
+  const toggleProvinceBoundaries = useEmbedFilters((state) => state.toggleProvinceBoundaries)
 
   // Convert timeRange to PeriodType for UI
   const periodType: PeriodType =
@@ -199,21 +228,43 @@ export function VergunningenDashboard() {
             a.y !== b.y ? a.y - b.y : a.q - b.q
           )
 
-          if (sortedPeriods.length >= 24) {
-            const p1Start = sortedPeriods[0]
-            const p1End = sortedPeriods[11]
-            const p2Start = sortedPeriods[sortedPeriods.length - 12]
-            const p2End = sortedPeriods[sortedPeriods.length - 1]
-
-            setPeriodLabels({
-              period1: `${p1Start.y} Q${p1Start.q} - ${p1End.y} Q${p1End.q}`,
-              period2: `${p2Start.y} Q${p2Start.q} - ${p2End.y} Q${p2End.q}`,
-              period1Start: p1Start,
-              period1End: p1End,
-              period2Start: p2Start,
-              period2End: p2End,
-            })
+          // Find the max data month
+          let maxYear = 0
+          let maxQuarter = 0
+          for (const row of normalizedQuarterly) {
+            if (row.y > maxYear || (row.y === maxYear && (row.q || 0) > maxQuarter)) {
+              maxYear = row.y
+              maxQuarter = row.q || 1
+            }
           }
+
+          // Period 1: Fixed 35 months starting from 2019 Q1
+          const period1StartMonths = 0 // 2019 Q1
+          const period1EndMonths = PERIOD_MONTHS - 1 // 35 months = months 0-34
+
+          // Period 2: Dynamic 35 months ending at the latest data month
+          const maxDataMonths = yearQuarterToMonths(maxYear, maxQuarter)
+          const period2EndMonths = maxDataMonths
+          const period2StartMonths = maxDataMonths - PERIOD_MONTHS + 1
+
+          const p1StartMonthsObj = monthsToYearQuarter(period1StartMonths)
+          const p1EndMonthsObj = monthsToYearQuarter(period1EndMonths)
+          const p2StartMonthsObj = monthsToYearQuarter(period2StartMonths)
+          const p2EndMonthsObj = monthsToYearQuarter(period2EndMonths)
+
+          const p1Start = { y: p1StartMonthsObj.year, q: p1StartMonthsObj.quarter }
+          const p1End = { y: p1EndMonthsObj.year, q: p1EndMonthsObj.quarter }
+          const p2Start = { y: p2StartMonthsObj.year, q: p2StartMonthsObj.quarter }
+          const p2End = { y: p2EndMonthsObj.year, q: p2EndMonthsObj.quarter }
+
+          setPeriodLabels({
+            period1: `${p1Start.y} Q${p1Start.q} - ${p1End.y} Q${p1End.q}`,
+            period2: `${p2Start.y} Q${p2Start.q} - ${p2End.y} Q${p2End.q}`,
+            period1Start: p1Start,
+            period1End: p1End,
+            period2Start: p2Start,
+            period2End: p2End,
+          })
         }
 
         // Prepare yearlyPeriods list (if available)
@@ -302,43 +353,36 @@ export function VergunningenDashboard() {
     (data: DataRow[], metric: 'ren' | 'dwell' | 'apt' | 'house'): PeriodComparisonRow[] => {
       if (data.length === 0) return []
 
-      // Extract unique (year, quarter) combinations and sort them
-      const periods = new Map<string, { y: number; q: number }>()
+      // Find max data month
+      let maxYear = 0
+      let maxQuarter = 0
       for (const row of data) {
-        const key = `${row.y}-${row.q}`
-        if (!periods.has(key)) {
-          periods.set(key, { y: row.y, q: row.q! })
+        if (row.y > maxYear || (row.y === maxYear && (row.q || 0) > maxQuarter)) {
+          maxYear = row.y
+          maxQuarter = row.q || 1
         }
       }
 
-      const sortedPeriods = Array.from(periods.values()).sort((a, b) =>
-        a.y !== b.y ? a.y - b.y : a.q - b.q
-      )
+      // Period 1: Fixed 35 months starting from 2019 Q1
+      const period1StartMonths = 0 // 2019 Q1
+      const period1EndMonths = PERIOD_MONTHS - 1 // 35 months = months 0-34
 
-      if (sortedPeriods.length < 24) {
-        console.warn(`Not enough periods for comparison: ${sortedPeriods.length}, need at least 24`)
-        return []
+      // Period 2: Dynamic 35 months ending at the latest data month
+      const maxDataMonths = yearQuarterToMonths(maxYear, maxQuarter)
+      const period2EndMonths = maxDataMonths
+      const period2StartMonths = maxDataMonths - PERIOD_MONTHS + 1
+
+      // Helper to check if a data row is in a month range
+      const isInRange = (row: DataRow, startMonths: number, endMonths: number) => {
+        const rowMonths = yearQuarterToMonths(row.y, row.q || 1)
+        return rowMonths >= startMonths && rowMonths <= endMonths
       }
 
-      // Period 1: first 12 quarters
-      const period1End = sortedPeriods[11]
-      const period1Start = sortedPeriods[0]
-
-      // Period 2: last 12 quarters
-      const period2Start = sortedPeriods[sortedPeriods.length - 12]
-      const period2End = sortedPeriods[sortedPeriods.length - 1]
-
       // Filter Period 1
-      const period1Data = data.filter(d =>
-        (d.y > period1Start.y || (d.y === period1Start.y && d.q! >= period1Start.q)) &&
-        (d.y < period1End.y || (d.y === period1End.y && d.q! <= period1End.q))
-      )
+      const period1Data = data.filter(d => isInRange(d, period1StartMonths, period1EndMonths))
 
       // Filter Period 2
-      const period2Data = data.filter(d =>
-        (d.y > period2Start.y || (d.y === period2Start.y && d.q! >= period2Start.q)) &&
-        (d.y < period2End.y || (d.y === period2End.y && d.q! <= period2End.q))
-      )
+      const period2Data = data.filter(d => isInRange(d, period2StartMonths, period2EndMonths))
 
       // Aggregate to arrondissement level
       const period1Agg = aggregateMunicipalityToArrondissement(
@@ -432,6 +476,48 @@ export function VergunningenDashboard() {
   return (
     <GeoProviderWithDefaults initialLevel="province" initialRegion="1000" initialProvince={null} initialMunicipality={null}>
       <div className="space-y-8">
+        {/* Chart Visualization Controls */}
+        <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-muted/30">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Grafiektype:</span>
+            <Select value={currentChartType} onValueChange={(v) => setChartType(v as any)}>
+              <SelectTrigger className="w-40 h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="composed">Gemengd (Staaf + Lijn)</SelectItem>
+                <SelectItem value="bar">Staafdiagram</SelectItem>
+                <SelectItem value="line">Lijndiagram</SelectItem>
+                <SelectItem value="area">Vlakdiagram</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleMovingAverage}
+            className={`h-9 px-4 text-sm rounded-md border transition-colors ${
+              showMovingAverage
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-input hover:bg-accent'
+            }`}
+          >
+            Voortschrijdend gemiddelde
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleProvinceBoundaries}
+            className={`h-9 px-4 text-sm rounded-md border transition-colors ${
+              showProvinceBoundaries
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-input hover:bg-accent'
+            }`}
+          >
+            Provinciegrenzen
+          </button>
+        </div>
+
         <AnalysisSection
           title="Renovatie (gebouwen)"
           data={currentData}
@@ -444,10 +530,15 @@ export function VergunningenDashboard() {
           dataSourceUrl="https://statbel.fgov.be/nl/themas/bouwen-wonen/bouwvergunningen"
           showMap={true}
           mapGeoLevel="arrondissement"
+          mapColorScheme="orangeDecile"
+          mapColorScaleMode="positive"
           period={periodConfig}
           getMunicipalityCode={(d) => Number(d.m)}
           mapYearlyPathTemplate={yearlyPathTemplate}
           mapYearlyPeriods={yearlyPeriods ?? undefined}
+          chartType={currentChartType}
+          showMovingAverage={showMovingAverage}
+          showProvinceBoundaries={showProvinceBoundaries}
           periodControls={
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground hidden sm:inline">Periode:</span>
@@ -479,10 +570,15 @@ export function VergunningenDashboard() {
             dataSourceUrl="https://statbel.fgov.be/nl/themas/bouwen-wonen/bouwvergunningen"
             showMap={true}
             mapGeoLevel="arrondissement"
+            mapColorScheme="orangeDecile"
+            mapColorScaleMode="positive"
             period={periodConfig}
             getMunicipalityCode={(d) => Number(d.m)}
             mapYearlyPathTemplate={yearlyPathTemplate}
             mapYearlyPeriods={yearlyPeriods ?? undefined}
+            chartType={currentChartType}
+            showMovingAverage={showMovingAverage}
+            showProvinceBoundaries={showProvinceBoundaries}
             tabsListClassName="flex-nowrap whitespace-nowrap"
             rightControls={
               <div className="flex items-center gap-3">
