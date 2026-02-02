@@ -20,6 +20,7 @@ import { BouwondernemersEmbed } from "@/components/analyses/bouwondernemers/Bouw
 import { BetaalbaarArrEmbed } from "@/components/analyses/betaalbaar-arr/BetaalbaarArrEmbed"
 import { SilcEnergieEmbed } from "@/components/analyses/silc-energie-2023/SilcEnergieEmbed"
 import { PeriodComparisonEmbed } from "@/components/analyses/vergunningen-goedkeuringen/PeriodComparisonEmbed"
+import { VergunningenEmbed } from "@/components/analyses/vergunningen-goedkeuringen/VergunningenEmbed"
 import { ArbeidersBediendenEmbed } from "@/components/analyses/arbeiders-bedienden/ArbeidersBediendenEmbed"
 import { ProvinceCode, RegionCode } from "@/lib/geo-utils"
 import { getEmbedConfig, getValidSections } from "@/lib/embed-config"
@@ -56,17 +57,23 @@ interface UrlParams {
   type: string | null
   region: RegionCode | null
   province: ProvinceCode | null
+  arrondissement: string | null
+  municipality: string | null
   sector: string | null
   measure: string | null
   metric: string | null
   timeRange: string | null
   subView: string | null
   showDecline: boolean
+  geoLevel: string | null
+  chartType: string | null
+  showMovingAverage: boolean
+  showProvinceBoundaries: boolean
 }
 
 function getParamsFromUrl(slug: string): UrlParams {
   if (typeof window === "undefined") {
-    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false }
+    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false }
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -100,6 +107,12 @@ function getParamsFromUrl(slug: string): UrlParams {
   const provinceStr = getParam("province")
   const province: ProvinceCode | null = provinceStr as ProvinceCode | null
 
+  // Arrondissement
+  const arrondissement = getParam("arr") || null
+
+  // Municipality
+  const municipality = getParam("municipality") || null
+
   // Sector (NACE code)
   const sector = getParam("sector") || null
 
@@ -118,6 +131,20 @@ function getParamsFromUrl(slug: string): UrlParams {
   // Show Decline (for huishoudensgroei): allow both explicit boolean and legacy "sector=decline"
   const showDecline = getParam("showDecline") === "true" || sector === "decline"
 
+  // Geographic level (for map visualization)
+  const geoLevel = getParam("geoLevel") || null
+
+  // Chart type (composed, line, bar, area)
+  const chartType = getParam("chartType") || null
+
+  // Show moving average (boolean: 1/0 or true/false)
+  const maStr = getParam("ma")
+  const showMovingAverage = maStr === "1" || maStr === "true"
+
+  // Show province boundaries on map (boolean: 1/0 or true/false)
+  const boundariesStr = getParam("boundaries")
+  const showProvinceBoundaries = boundariesStr === "1" || boundariesStr === "true"
+
   return {
     view: viewType,
     horizon: Number.isFinite(horizon as number) ? horizon : null,
@@ -126,12 +153,18 @@ function getParamsFromUrl(slug: string): UrlParams {
     type,
     region,
     province,
+    arrondissement,
+    municipality,
     sector,
     measure,
     metric,
     timeRange,
     subView,
     showDecline,
+    geoLevel,
+    chartType,
+    showMovingAverage,
+    showProvinceBoundaries,
   }
 }
 
@@ -154,12 +187,18 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
     type: null,
     region: null,
     province: null,
+    arrondissement: null,
+    municipality: null,
     sector: null,
     measure: null,
     metric: null,
     timeRange: null,
     subView: null,
     showDecline: false,
+    geoLevel: null,
+    chartType: null,
+    showMovingAverage: false,
+    showProvinceBoundaries: false,
   })
 
   // State for dynamically loaded data
@@ -607,6 +646,37 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
       return (
         <SilcEnergieEmbed
           section={section as "renovatiemaatregelen" | "verwarmingssystemen" | "energiebronnen" | "isolatieverbeteringen"}
+        />
+      )
+    }
+
+    // Handle VergunningenEmbed
+    if (config.component === "VergunningenEmbed") {
+      const validSections = getValidSections(slug)
+      if (!validSections.includes(section)) {
+        return (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">
+              Ongeldige sectie: {section}. Geldige opties: {validSections.join(", ")}
+            </p>
+          </div>
+        )
+      }
+
+      return (
+        <VergunningenEmbed
+          section={section as "renovatie" | "nieuwbouw-dwell" | "nieuwbouw-apt" | "nieuwbouw-house" | "nieuwbouw"}
+          viewType={urlParams.view}
+          timeRange={urlParams.timeRange}
+          category={urlParams.type}
+          geoLevel={urlParams.geoLevel}
+          region={urlParams.region}
+          province={urlParams.province}
+          arrondissement={urlParams.arrondissement}
+          municipality={urlParams.municipality}
+          chartType={urlParams.chartType}
+          showMovingAverage={urlParams.showMovingAverage}
+          showProvinceBoundaries={urlParams.showProvinceBoundaries}
         />
       )
     }

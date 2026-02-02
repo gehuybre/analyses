@@ -30,8 +30,11 @@ type PeriodComparisonSectionKey =
   | "nieuwbouw-vergelijking-aantallen"
   | "nieuwbouw-vergelijking-percentage"
 
-const PERIOD1_LABEL = "2019 Q1 - 2021 Q4"
-const PERIOD2_LABEL = "2022 Q4 - 2025 Q3"
+// Period 1 is fixed: starts at 2019-01 and lasts 35 months
+// Period 2 is dynamic: latest 35 months of available data
+const PERIOD1_START_YEAR = 2019
+const PERIOD1_START_QUARTER = 1
+const PERIOD_MONTHS = 35
 
 const COMPARISON_CONFIG: Record<
   PeriodComparisonSectionKey,
@@ -69,6 +72,49 @@ const COMPARISON_CONFIG: Record<
   },
 }
 
+/**
+ * Convert year and quarter to a comparable month number (0-based)
+ * E.g., 2019 Q1 = 0, 2019 Q2 = 3, 2020 Q1 = 12, etc.
+ */
+function yearQuarterToMonths(year: number, quarter: number = 1): number {
+  return (year - PERIOD1_START_YEAR) * 12 + (quarter - 1) * 3
+}
+
+/**
+ * Convert month number back to year and quarter
+ */
+function monthsToYearQuarter(months: number): { year: number; quarter: number } {
+  const year = PERIOD1_START_YEAR + Math.floor(months / 12)
+  const quarter = Math.floor((months % 12) / 3) + 1
+  return { year, quarter: Math.min(quarter, 4) }
+}
+
+/**
+ * Format period as "YYYY Q# - YYYY Q#"
+ */
+function formatPeriod(startMonths: number, endMonths: number): string {
+  const start = monthsToYearQuarter(startMonths)
+  const end = monthsToYearQuarter(endMonths)
+  return `${start.year} Q${start.quarter} - ${end.year} Q${end.quarter}`
+}
+
+/**
+ * Find the maximum month (as year-quarter) in the dataset
+ */
+function findMaxDataMonth(data: DataRow[]): { year: number; quarter: number } {
+  let maxYear = 0
+  let maxQuarter = 0
+
+  for (const row of data) {
+    if (row.y > maxYear || (row.y === maxYear && (row.q || 0) > maxQuarter)) {
+      maxYear = row.y
+      maxQuarter = row.q || 1
+    }
+  }
+
+  return { year: maxYear, quarter: maxQuarter }
+}
+
 function normalizeQuarterlyData(data: DataRow[]): DataRow[] {
   const aggregatedQuarter = new Map<string, DataRow>()
 
@@ -99,14 +145,43 @@ function normalizeQuarterlyData(data: DataRow[]): DataRow[] {
   return Array.from(aggregatedQuarter.values())
 }
 
-function calculatePeriodComparison(
-  data: DataRow[],
+interface PeriodComparisonParams {
+  data: DataRow[]
   metric: "ren" | "dwell" | "apt" | "house"
-): PeriodComparisonRow[] {
-  const period1Data = data.filter((d) => d.y >= 2019 && d.y <= 2021)
-  const period2Data = data.filter(
-    (d) => (d.y === 2022 && d.q === 4) || d.y === 2023 || d.y === 2024 || (d.y === 2025 && (d.q || 0) <= 3)
-  )
+  maxDataMonth?: { year: number; quarter: number }
+}
+
+interface PeriodComparisonResult {
+  rows: PeriodComparisonRow[]
+  period1Label: string
+  period2Label: string
+}
+
+function calculatePeriodComparison({
+  data,
+  metric,
+  maxDataMonth,
+}: PeriodComparisonParams): PeriodComparisonResult {
+  // Calculate max month if not provided
+  const max = maxDataMonth || findMaxDataMonth(data)
+
+  // Period 1: Fixed 35 months starting from 2019 Q1
+  const period1StartMonths = 0 // 2019 Q1
+  const period1EndMonths = PERIOD_MONTHS - 1 // 35 months = months 0-34
+
+  // Period 2: Dynamic 35 months ending at the latest data month
+  const maxDataMonths = yearQuarterToMonths(max.year, max.quarter)
+  const period2EndMonths = maxDataMonths
+  const period2StartMonths = maxDataMonths - PERIOD_MONTHS + 1
+
+  // Helper to check if a data row is in a month range
+  const isInRange = (row: DataRow, startMonths: number, endMonths: number) => {
+    const rowMonths = yearQuarterToMonths(row.y, row.q || 1)
+    return rowMonths >= startMonths && rowMonths <= endMonths
+  }
+
+  const period1Data = data.filter((d) => isInRange(d, period1StartMonths, period1EndMonths))
+  const period2Data = data.filter((d) => isInRange(d, period2StartMonths, period2EndMonths))
 
   const period1Agg = aggregateMunicipalityToArrondissement(
     period1Data,
@@ -146,7 +221,15 @@ function calculatePeriodComparison(
     })
   }
 
-  return comparisonRows.sort((a, b) => a.arrondissementName.localeCompare(b.arrondissementName, "nl-BE"))
+  const sortedRows = comparisonRows.sort((a, b) =>
+    a.arrondissementName.localeCompare(b.arrondissementName, "nl-BE")
+  )
+
+  return {
+    rows: sortedRows,
+    period1Label: formatPeriod(period1StartMonths, period1EndMonths),
+    period2Label: formatPeriod(period2StartMonths, period2EndMonths),
+  }
 }
 
 interface PeriodComparisonEmbedProps {
@@ -170,10 +253,18 @@ export function PeriodComparisonEmbed({ section }: PeriodComparisonEmbedProps) {
 
   const [selectedRegion, setSelectedRegion] = useState<RegionCode>("2000")
 
-  const comparisonData = useMemo(
-    () => calculatePeriodComparison(normalizedQuarterly, config.metric),
+  const comparisonResult = useMemo(
+    () =>
+      calculatePeriodComparison({
+        data: normalizedQuarterly,
+        metric: config.metric,
+      }),
     [normalizedQuarterly, config.metric]
   )
+
+  const comparisonData = comparisonResult.rows
+  const period1Label = comparisonResult.period1Label
+  const period2Label = comparisonResult.period2Label
 
   const filteredData = useMemo(() => {
     if (selectedRegion === "1000") return comparisonData
@@ -278,8 +369,8 @@ export function PeriodComparisonEmbed({ section }: PeriodComparisonEmbedProps) {
             {config.view === "counts" ? (
               <DumbbellChart
                 data={countsChartData}
-                period1Label={PERIOD1_LABEL}
-                period2Label={PERIOD2_LABEL}
+                period1Label={period1Label}
+                period2Label={period2Label}
                 xAxisLabelAbove="Aantal"
               />
             ) : (
@@ -312,8 +403,8 @@ export function PeriodComparisonEmbed({ section }: PeriodComparisonEmbedProps) {
       metric={config.metric}
       slug="vergunningen-goedkeuringen"
       sectionId={`${baseSectionId}-vergelijking`}
-      period1Label={PERIOD1_LABEL}
-      period2Label={PERIOD2_LABEL}
+      period1Label={period1Label}
+      period2Label={period2Label}
       mapColorScheme="orangeDecile"
       mapColorScaleMode="negative"
       mapNeutralFill="#ffffff"

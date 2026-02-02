@@ -129,6 +129,7 @@ export function ExportButtons({
 
   // Get current filter state from store for automatic embed URL generation
   const toQueryString = useEmbedFilters((state) => state.toQueryString)
+  const storeCurrentView = useEmbedFilters((state) => state.currentView)
 
   const getEmbedCode = useCallback((): string => {
     // Type guard: validate that this section is embeddable
@@ -142,9 +143,10 @@ export function ExportButtons({
     const config = getEmbedConfig(slug, sectionId)
     const height = config?.height ?? 500 // Default to 500px if not configured
 
-    // Get the base URL - in production this will be the GitHub Pages URL
+    // Get the base URL - embed routes are at root level, not under basePath
+    // GitHub Pages may serve from a subdirectory, but embed routes are always at /embed/
     const baseUrl = typeof window !== "undefined"
-      ? window.location.origin + getBasePath()
+      ? window.location.origin
       : ""
 
     // URL-encode slug and sectionId for security
@@ -155,8 +157,10 @@ export function ExportButtons({
     const params = new URLSearchParams(toQueryString())
 
     // Ensure embed URL always carries the current view (chart/table/map)
+    // Use store's currentView instead of prop to ensure it reflects what the user actually selected
     const viewKey = `${slug}.view`
-    params.set(viewKey, viewType)
+    const effectiveView = storeCurrentView || viewType
+    params.set(viewKey, effectiveView)
     params.delete("view")
 
     if (embedParams) {
@@ -217,7 +221,7 @@ export function ExportButtons({
   });
 })();
 </script>`
-  }, [slug, sectionId, title, toQueryString, embedParams])
+  }, [slug, sectionId, title, toQueryString, storeCurrentView, embedParams, viewType])
 
   const copyEmbedCode = useCallback(async () => {
     const code = getEmbedCode()
