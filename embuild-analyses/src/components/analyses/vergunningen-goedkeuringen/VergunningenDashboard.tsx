@@ -11,7 +11,7 @@ import { normalizeNisCode } from "@/lib/nis-fusion-utils"
 import { aggregateMunicipalityToArrondissement } from "@/lib/map-utils"
 import { ARRONDISSEMENTS } from "@/lib/geo-utils"
 import { getAnalysisConstraints, applyDataConstraints } from "@/lib/embed-data-constraints"
-import { useEmbedFilters } from "@/lib/stores/embed-filters-store"
+import { useEmbedFilters, useInitializeFiltersWithDefaults } from "@/lib/stores/embed-filters-store"
 
 // Data is now lazy-loaded from public/data/vergunningen-goedkeuringen/
 // Static imports replaced to reduce JavaScript bundle size by 3.8 MB
@@ -34,12 +34,25 @@ type MunicipalityData = {
   name: string
 }
 
+type PeriodLabels = {
+  period1: string
+  period2: string
+  period1Start: { y: number; q: number }
+  period1End: { y: number; q: number }
+  period2Start: { y: number; q: number }
+  period2End: { y: number; q: number }
+}
+
 export function VergunningenDashboard() {
+  // Initialize filters from URL with analysis-specific defaults
+  useInitializeFiltersWithDefaults('vergunningen-goedkeuringen')
+
   const [quarterlyData, setQuarterlyData] = React.useState<DataRow[] | null>(null)
   const [monthlyData, setMonthlyData] = React.useState<DataRow[] | null>(null)
   const [yearlyData, setYearlyData] = React.useState<DataRow[] | null>(null)
   const [municipalities, setMunicipalities] = React.useState<MunicipalityData[] | null>(null)
   const [yearlyPeriods, setYearlyPeriods] = React.useState<number[] | null>(null)
+  const [periodLabels, setPeriodLabels] = React.useState<PeriodLabels | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -172,6 +185,37 @@ export function VergunningenDashboard() {
         setMonthlyData(normalizedMonthly)
         setMunicipalities(municipalitiesData)
 
+        // Calculate period labels based on actual data
+        if (normalizedQuarterly.length > 0) {
+          const periods = new Map<string, { y: number; q: number }>()
+          for (const row of normalizedQuarterly) {
+            const key = `${row.y}-${row.q}`
+            if (!periods.has(key)) {
+              periods.set(key, { y: row.y, q: row.q! })
+            }
+          }
+
+          const sortedPeriods = Array.from(periods.values()).sort((a, b) =>
+            a.y !== b.y ? a.y - b.y : a.q - b.q
+          )
+
+          if (sortedPeriods.length >= 24) {
+            const p1Start = sortedPeriods[0]
+            const p1End = sortedPeriods[11]
+            const p2Start = sortedPeriods[sortedPeriods.length - 12]
+            const p2End = sortedPeriods[sortedPeriods.length - 1]
+
+            setPeriodLabels({
+              period1: `${p1Start.y} Q${p1Start.q} - ${p1End.y} Q${p1End.q}`,
+              period2: `${p2Start.y} Q${p2Start.q} - ${p2End.y} Q${p2End.q}`,
+              period1Start: p1Start,
+              period1End: p1End,
+              period2Start: p2Start,
+              period2End: p2End,
+            })
+          }
+        }
+
         // Prepare yearlyPeriods list (if available)
         if (yearlyIndex && Array.isArray(yearlyIndex)) {
           const yrs = yearlyIndex.map((e: any) => e.year).sort((a: number, b: number) => a - b)
@@ -256,16 +300,44 @@ export function VergunningenDashboard() {
   // Helper function to calculate period comparison data
   const calculatePeriodComparison = React.useCallback(
     (data: DataRow[], metric: 'ren' | 'dwell' | 'apt' | 'house'): PeriodComparisonRow[] => {
-      // Filter Period 1: 2019 Q1 - 2021 Q4 (12 quarters)
-      const period1Data = data.filter(d =>
-        d.y >= 2019 && d.y <= 2021
+      if (data.length === 0) return []
+
+      // Extract unique (year, quarter) combinations and sort them
+      const periods = new Map<string, { y: number; q: number }>()
+      for (const row of data) {
+        const key = `${row.y}-${row.q}`
+        if (!periods.has(key)) {
+          periods.set(key, { y: row.y, q: row.q! })
+        }
+      }
+
+      const sortedPeriods = Array.from(periods.values()).sort((a, b) =>
+        a.y !== b.y ? a.y - b.y : a.q - b.q
       )
 
-      // Filter Period 2: 2022 Q4 - 2025 Q3 (12 quarters)
+      if (sortedPeriods.length < 24) {
+        console.warn(`Not enough periods for comparison: ${sortedPeriods.length}, need at least 24`)
+        return []
+      }
+
+      // Period 1: first 12 quarters
+      const period1End = sortedPeriods[11]
+      const period1Start = sortedPeriods[0]
+
+      // Period 2: last 12 quarters
+      const period2Start = sortedPeriods[sortedPeriods.length - 12]
+      const period2End = sortedPeriods[sortedPeriods.length - 1]
+
+      // Filter Period 1
+      const period1Data = data.filter(d =>
+        (d.y > period1Start.y || (d.y === period1Start.y && d.q! >= period1Start.q)) &&
+        (d.y < period1End.y || (d.y === period1End.y && d.q! <= period1End.q))
+      )
+
+      // Filter Period 2
       const period2Data = data.filter(d =>
-        (d.y === 2022 && d.q === 4) ||
-        (d.y === 2023 || d.y === 2024) ||
-        (d.y === 2025 && d.q! <= 3)
+        (d.y > period2Start.y || (d.y === period2Start.y && d.q! >= period2Start.q)) &&
+        (d.y < period2End.y || (d.y === period2End.y && d.q! <= period2End.q))
       )
 
       // Aggregate to arrondissement level
@@ -444,21 +516,25 @@ export function VergunningenDashboard() {
         {/* Period Comparison Sections */}
         <div className="space-y-8 mt-12 pt-12 border-t">
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold">Periode vergelijking 2019-2021 vs 2022-2025</h2>
+            <h2 className="text-3xl font-bold">Periode vergelijking {periodLabels ? `${periodLabels.period1Start.y}-${periodLabels.period1End.y} vs ${periodLabels.period2Start.y}-${periodLabels.period2End.y}` : 'wordt geladen...'}</h2>
             <p className="text-muted-foreground">
-              Vergelijking van twee periodes van 3 jaar: 2019 Q1 - 2021 Q4 (Periode 1) versus 2022 Q4 - 2025 Q3 (Periode 2)
+              {periodLabels ? (
+                <>Vergelijking van twee periodes van 3 jaar: {periodLabels.period1} (Periode 1) versus {periodLabels.period2} (Periode 2)</>
+              ) : (
+                'Periodegegevens worden berekend...'
+              )}
             </p>
           </div>
 
           {/* Renovatie Comparison */}
           <PeriodComparisonSection
-            title="Renovatie - vergelijking 2019-2021 vs 2022-2025"
+            title={`Renovatie - vergelijking ${periodLabels ? `${periodLabels.period1Start.y}-${periodLabels.period1End.y} vs ${periodLabels.period2Start.y}-${periodLabels.period2End.y}` : 'laden...'}`}
             data={renovatieComparisonData}
             metric="ren"
             slug="vergunningen-goedkeuringen"
             sectionId="renovatie-vergelijking"
-            period1Label="2019 Q1 - 2021 Q4"
-            period2Label="2022 Q4 - 2025 Q3"
+            period1Label={periodLabels?.period1 || "Periode 1"}
+            period2Label={periodLabels?.period2 || "Periode 2"}
             mapColorScheme="orangeDecile"
             mapColorScaleMode="negative"
             mapNeutralFill="#ffffff"
@@ -466,13 +542,13 @@ export function VergunningenDashboard() {
 
           {/* Nieuwbouw Comparison */}
           <PeriodComparisonSection
-            title="Nieuwbouw - vergelijking 2019-2021 vs 2022-2025"
+            title={`Nieuwbouw - vergelijking ${periodLabels ? `${periodLabels.period1Start.y}-${periodLabels.period1End.y} vs ${periodLabels.period2Start.y}-${periodLabels.period2End.y}` : 'laden...'}`}
             data={nieuwbouwComparisonData}
             metric="dwell"
             slug="vergunningen-goedkeuringen"
             sectionId="nieuwbouw-vergelijking"
-            period1Label="2019 Q1 - 2021 Q4"
-            period2Label="2022 Q4 - 2025 Q3"
+            period1Label={periodLabels?.period1 || "Periode 1"}
+            period2Label={periodLabels?.period2 || "Periode 2"}
             mapColorScheme="orangeDecile"
             mapColorScaleMode="negative"
             mapNeutralFill="#ffffff"
