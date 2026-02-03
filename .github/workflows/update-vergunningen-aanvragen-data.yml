@@ -48,8 +48,8 @@ jobs:
 
       - name: Copy results to public directory
         run: |
-          mkdir -p embuild-analyses/public/analyses/vergunningen-aanvragen/results
-          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json embuild-analyses/public/analyses/vergunningen-aanvragen/results/
+          mkdir -p embuild-analyses/public/data/vergunningen-aanvragen
+          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json embuild-analyses/public/data/vergunningen-aanvragen/
 
       - name: Commit and push changes to analyses repo
         run: |
@@ -69,17 +69,20 @@ jobs:
           # Clone the data repo
           git clone https://github.com/gehuybre/data.git data-repo
 
-          # Create directory structure
+          # Create directory structure for both locations
           mkdir -p data-repo/data/vergunningen-aanvragen
+          mkdir -p data-repo/analyses/vergunningen-aanvragen/results
 
-          # Copy the generated data
-          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json data-repo/data/vergunningen-aanvragen/
+          # Copy the generated data to both locations (from public/data for consistency)
+          cp embuild-analyses/public/data/vergunningen-aanvragen/*.json data-repo/data/vergunningen-aanvragen/
+          cp embuild-analyses/public/data/vergunningen-aanvragen/*.json data-repo/analyses/vergunningen-aanvragen/results/
 
           # Commit and push to data repo
           cd data-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/vergunningen-aanvragen/
+          git add analyses/vergunningen-aanvragen/results/
 
           if ! git diff --staged --quiet; then
             git commit -m "chore(data): update vergunningen-aanvragen data (auto)"
