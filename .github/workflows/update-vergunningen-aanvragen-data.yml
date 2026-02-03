@@ -1,0 +1,92 @@
+name: Update vergunningen-aanvragen data (manual upload)
+
+concurrency:
+  group: update-vergunningen-aanvragen-data
+  cancel-in-progress: true
+
+on:
+  schedule:
+    # Monthly on day-of-month 1 (UTC)
+    - cron: '10 1 1 * *'
+  workflow_dispatch: {}
+  push:
+    paths:
+      - embuild-analyses/analyses/vergunningen-aanvragen/data/**
+      - embuild-analyses/analyses/vergunningen-aanvragen/src/**
+      - embuild-analyses/analyses/vergunningen-aanvragen/content.mdx
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
+
+      - name: Configure Git LFS (no download)
+        working-directory: .
+        run: git lfs install --local
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies (minimal)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas
+
+      - name: Run data processor
+        run: |
+          set -e
+          python embuild-analyses/analyses/vergunningen-aanvragen/src/process_vergunningen.py
+
+      - name: Copy results to public directory
+        run: |
+          mkdir -p embuild-analyses/public/analyses/vergunningen-aanvragen/results
+          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json embuild-analyses/public/analyses/vergunningen-aanvragen/results/
+
+      - name: Commit and push changes to analyses repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add embuild-analyses/analyses/vergunningen-aanvragen/results
+          git add embuild-analyses/analyses/vergunningen-aanvragen/content.mdx || true
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(data): update vergunningen-aanvragen results (auto)"
+            git push origin HEAD:main
+          else
+            echo "No changes to commit"
+          fi
+
+      - name: Export data to data repository
+        run: |
+          # Clone the data repo
+          git clone https://github.com/gehuybre/data.git data-repo
+
+          # Create directory structure
+          mkdir -p data-repo/data/vergunningen-aanvragen
+
+          # Copy the generated data
+          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json data-repo/data/vergunningen-aanvragen/
+
+          # Commit and push to data repo
+          cd data-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/vergunningen-aanvragen/
+
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(data): update vergunningen-aanvragen data (auto)"
+            git push origin HEAD:main
+          else
+            echo "No changes to commit in data repo"
+          fi
+
+
+
