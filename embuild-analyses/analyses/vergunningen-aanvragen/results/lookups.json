@@ -1,0 +1,38 @@
+{
+  "types": [
+    {
+      "code": "eengezins",
+      "nl": "Eengezinswoning"
+    },
+    {
+      "code": "meergezins",
+      "nl": "Meergezinswoning"
+    },
+    {
+      "code": "kamer",
+      "nl": "Kamerwoning"
+    }
+  ],
+  "besluit_types": [
+    {
+      "code": "Gemeente",
+      "nl": "Gemeente"
+    },
+    {
+      "code": "Provincie",
+      "nl": "Provincie"
+    },
+    {
+      "code": "Vlaamse Overheid",
+      "nl": "Vlaamse Overheid"
+    },
+    {
+      "code": "RVVB",
+      "nl": "RVVB"
+    },
+    {
+      "code": "Onbekend",
+      "nl": "Onbekend"
+    }
+  ]
+}
