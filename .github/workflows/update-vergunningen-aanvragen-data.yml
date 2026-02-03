@@ -65,9 +65,11 @@ jobs:
           fi
 
       - name: Export data to data repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Clone the data repo
-          git clone https://github.com/gehuybre/data.git data-repo
+          # Clone the data repo with authentication
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/gehuybre/data.git data-repo
 
           # Create directory structure for both locations
           mkdir -p data-repo/data/vergunningen-aanvragen
