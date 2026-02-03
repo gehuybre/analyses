@@ -12,6 +12,9 @@
 /.ruff_cache/
 /node_modules/
 /embuild-analyses/analyses/**/data/
+# Exception: track source CSV files for reproducibility
+!/embuild-analyses/analyses/vergunningen-aanvragen/data/
+!/embuild-analyses/analyses/vergunningen-aanvragen/data/*.csv
 /embuild-analyses/analyses/**/raw/
 /embuild-analyses/analyses/**/results/
 /embuild-analyses/public/data/
