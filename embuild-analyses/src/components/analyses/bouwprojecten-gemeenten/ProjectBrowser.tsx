@@ -317,7 +317,7 @@ export function ProjectBrowser() {
     <div className="space-y-6">
       {/* Header */}
       <div className="rounded-lg border bg-card p-6">
-        <h2 className="text-2xl font-bold mb-2">Projectbrowser - bouwkansen 2026-2031</h2>
+        <h2 className="text-2xl font-bold mb-2">Projectbrowser - 2026-2031</h2>
         <p className="text-muted-foreground">
           Doorzoek concrete investeringsprojecten uit de meerjarenplannen van Vlaamse gemeenten.
         </p>

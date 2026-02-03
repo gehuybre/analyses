@@ -20,6 +20,12 @@ DATA_DIR = SCRIPT_DIR.parent / 'data'
 PUBLIC_DATA_DIR = SCRIPT_DIR.parent.parent.parent / 'public' / 'data' / 'bouwprojecten-gemeenten'
 PUBLIC_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# External data repo (if available for split-repo setup)
+DATA_REPO_DIR = SCRIPT_DIR.parents[4] / 'data' / 'data' / 'bouwprojecten-gemeenten'
+DATA_REPO_AVAILABLE = DATA_REPO_DIR.parent.parent.exists() and DATA_REPO_DIR.parent.parent.name == 'data'
+if DATA_REPO_AVAILABLE:
+    DATA_REPO_DIR.mkdir(parents=True, exist_ok=True)
+
 # Input files
 INPUT_CSV = DATA_DIR / 'data-54.csv'  # Primary data source with policy categorization
 PARQUET_FULL = SCRIPT_DIR.parent / 'results' / 'projects_2026_full.parquet'
@@ -153,8 +159,8 @@ def extract_code_description(text_block):
 
     result = {}
 
-    # Extract code (BD, AP, or AC followed by digits)
-    code_match = re.search(r'Code:\s*([A-Z]+\d+)', text_block)
+    # Extract code (can be like AC123 or 6.1.3. or similar formats)
+    code_match = re.search(r'Code:\s*([A-Z0-9.]+)', text_block)
     if code_match:
         result['code'] = code_match.group(1)
 
@@ -264,9 +270,12 @@ def process_projects(df, nis_lookups, policy_lookup=None):
             skipped_no_policy += 1
             continue
 
-        # Extract action details
+        # Extract policy domain and action plan details
+        bd_data = extract_code_description(row.get('Beleidsdoelst. totaaloverzicht', ''))
+        ap_data = extract_code_description(row.get('Actieplan totaaloverzicht', ''))
         ac_data = extract_code_description(row.get('Actie totaaloverzicht', ''))
-        if not ac_data.get('code') or not ac_data.get('short'):
+
+        if not ac_data.get('short'):
             continue
 
         # Parse amount
@@ -290,14 +299,20 @@ def process_projects(df, nis_lookups, policy_lookup=None):
             projects_map[project_key] = {
                 "municipality": municipality_name,
                 "nis_code": nis_code,
+                "bd_code": bd_data.get('code', ''),
+                "bd_short": bd_data.get('short', ''),
+                "bd_long": bd_data.get('long', ''),
+                "ap_code": ap_data.get('code', ''),
+                "ap_short": ap_data.get('short', ''),
+                "ap_long": ap_data.get('long', ''),
                 "ac_code": ac_code,
                 "ac_short": ac_data.get('short', ''),
                 "ac_long": ac_data.get('long', ''),
-                "beleidsdomein": beleidsdomein,
-                "beleidssubdomein": beleidssubdomein,
                 "categories": categories,
                 "total_amount": 0,
-                "yearly_amounts": {}
+                "amount_per_capita": 0,
+                "yearly_amounts": {str(y): 0 for y in range(2026, 2032)},
+                "yearly_per_capita": {str(y): 0 for y in range(2026, 2032)}
             }
 
         # Accumulate amount
@@ -311,8 +326,11 @@ def process_projects(df, nis_lookups, policy_lookup=None):
         # Round amounts
         project_data["total_amount"] = round(project_data["total_amount"], 2)
         project_data["yearly_amounts"] = {
-            k: round(v, 2) for k, v in project_data["yearly_amounts"].items()
+            str(k): round(v, 2) for k, v in project_data["yearly_amounts"].items()
         }
+        # Initialize per_capita as 0 for now (would need population data to calculate properly)
+        project_data["amount_per_capita"] = 0
+        project_data["yearly_per_capita"] = {str(y): 0 for y in range(2026, 2032)}
         projects.append(project_data)
 
     print(f"\nProcessed {len(projects)} unique projects")
@@ -390,13 +408,21 @@ def chunk_and_save(projects, chunk_size=2000):
 
     for i, chunk in enumerate(chunks):
         filename = f"projects_2026_chunk_{i}.json"
-        filepath = PUBLIC_DATA_DIR / filename
         # sanitize chunk contents for JSON
         sanitized_chunk = [sanitize_project(p) for p in chunk]
+
+        # Write to public data directory
+        filepath = PUBLIC_DATA_DIR / filename
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(sanitized_chunk, f, ensure_ascii=False, indent=2)
         size_mb = filepath.stat().st_size / 1024 / 1024
         print(f"  → {filename} ({len(chunk)} projects, {size_mb:.2f} MB)")
+
+        # Also write to external data repo if available (split-repo setup)
+        if DATA_REPO_AVAILABLE:
+            repo_filepath = DATA_REPO_DIR / filename
+            with open(repo_filepath, 'w', encoding='utf-8') as f:
+                json.dump(sanitized_chunk, f, ensure_ascii=False, indent=2)
 
     # Create metadata file
     total_amount = sum(p['total_amount'] for p in projects)
@@ -448,6 +474,12 @@ def chunk_and_save(projects, chunk_size=2000):
     with open(metadata_file, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
 
+    # Also write to external data repo if available
+    if DATA_REPO_AVAILABLE:
+        repo_metadata_file = DATA_REPO_DIR / "projects_metadata.json"
+        with open(repo_metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+
     print(f"\n  → projects_metadata.json")
     print(f"\nMetadata:")
     print(f"  Total projects: {metadata['total_projects']}")
@@ -457,6 +489,14 @@ def chunk_and_save(projects, chunk_size=2000):
     print(f"\nCategory breakdown:")
     for cat_id, cat_data in sorted(metadata['categories'].items(), key=lambda x: x[1]['project_count'], reverse=True):
         print(f"  {cat_data['label']}: {cat_data['project_count']} projects")
+
+    # Report export locations
+    print(f"\nExport locations:")
+    print(f"  ✓ Local: {PUBLIC_DATA_DIR}")
+    if DATA_REPO_AVAILABLE:
+        print(f"  ✓ Data repo: {DATA_REPO_DIR}")
+    else:
+        print(f"  ℹ Data repo not available (is gehuybre/data cloned?)")
 
 
 def main():
