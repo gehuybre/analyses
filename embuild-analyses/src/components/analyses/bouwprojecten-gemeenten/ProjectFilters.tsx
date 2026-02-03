@@ -158,7 +158,10 @@ export function ProjectFiltersComponent({
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-              <Command>
+              <Command filter={(value, search) => {
+                // Custom filter for case-insensitive searching
+                return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+              }}>
                 <CommandInput placeholder="Zoek gemeente..." />
                 <CommandList>
                   <CommandEmpty>geen gemeente gevonden.</CommandEmpty>
