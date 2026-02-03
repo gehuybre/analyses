@@ -1198,15 +1198,15 @@ function InnerDashboard() {
     sloopYearly: SloopYearlyRow[]
     sloopByBesluit: SloopBesluitRow[]
   }>({
-    nieuwbouwQuarterly: "/analyses/vergunningen-aanvragen/results/nieuwbouw_quarterly.json",
-    nieuwbouwYearly: "/analyses/vergunningen-aanvragen/results/nieuwbouw_yearly.json",
-    nieuwbouwByType: "/analyses/vergunningen-aanvragen/results/nieuwbouw_by_type.json",
-    verbouwQuarterly: "/analyses/vergunningen-aanvragen/results/verbouw_quarterly.json",
-    verbouwYearly: "/analyses/vergunningen-aanvragen/results/verbouw_yearly.json",
-    verbouwByType: "/analyses/vergunningen-aanvragen/results/verbouw_by_type.json",
-    sloopQuarterly: "/analyses/vergunningen-aanvragen/results/sloop_quarterly.json",
-    sloopYearly: "/analyses/vergunningen-aanvragen/results/sloop_yearly.json",
-    sloopByBesluit: "/analyses/vergunningen-aanvragen/results/sloop_by_besluit.json",
+    nieuwbouwQuarterly: "/data/vergunningen-aanvragen/nieuwbouw_quarterly.json",
+    nieuwbouwYearly: "/data/vergunningen-aanvragen/nieuwbouw_yearly.json",
+    nieuwbouwByType: "/data/vergunningen-aanvragen/nieuwbouw_by_type.json",
+    verbouwQuarterly: "/data/vergunningen-aanvragen/verbouw_quarterly.json",
+    verbouwYearly: "/data/vergunningen-aanvragen/verbouw_yearly.json",
+    verbouwByType: "/data/vergunningen-aanvragen/verbouw_by_type.json",
+    sloopQuarterly: "/data/vergunningen-aanvragen/sloop_quarterly.json",
+    sloopYearly: "/data/vergunningen-aanvragen/sloop_yearly.json",
+    sloopByBesluit: "/data/vergunningen-aanvragen/sloop_by_besluit.json",
   })
 
   if (loading) {
