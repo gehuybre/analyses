@@ -17,5 +17,8 @@
 !/embuild-analyses/analyses/vergunningen-aanvragen/data/*.csv
 /embuild-analyses/analyses/**/raw/
 /embuild-analyses/analyses/**/results/
+# Exception: track generated results for vergunningen-aanvragen
+!/embuild-analyses/analyses/vergunningen-aanvragen/results/
+!/embuild-analyses/analyses/vergunningen-aanvragen/results/*.json
 /embuild-analyses/public/data/
 /embuild-analyses/public/analyses/
