@@ -13,10 +13,21 @@ import pandas as pd
 import json
 from pathlib import Path
 
+def write_json(filename, data, **kwargs):
+    """Write JSON to both results directory and public data directory"""
+    with open(RESULTS_DIR / filename, "w") as f:
+        json.dump(data, f, **kwargs)
+    with open(PUBLIC_DATA_DIR / filename, "w") as f:
+        json.dump(data, f, **kwargs)
+
 # Paths
 DATA_DIR = Path(__file__).parent.parent / "data"
 RESULTS_DIR = Path(__file__).parent.parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
+
+# Also write to public data directory for GitHub Pages
+PUBLIC_DATA_DIR = Path(__file__).parent.parent.parent.parent / "public" / "data" / "vergunningen-aanvragen"
+PUBLIC_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Read CSV
 df = pd.read_csv(
@@ -92,12 +103,11 @@ nieuwbouw_quarterly = df_nieuwbouw.groupby(["jaar", "kwartaal_nr"]).agg({
     "woonoppervlakte_m2": "sum"
 }).reset_index().sort_values(["jaar", "kwartaal_nr"])
 
-with open(RESULTS_DIR / "nieuwbouw_quarterly.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "q": int(r["kwartaal_nr"]), "p": int(r["aantal_projecten"]),
-         "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
-        for _, r in nieuwbouw_quarterly.iterrows()
-    ], f)
+write_json("nieuwbouw_quarterly.json", [
+    {"y": int(r["jaar"]), "q": int(r["kwartaal_nr"]), "p": int(r["aantal_projecten"]),
+     "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
+    for _, r in nieuwbouw_quarterly.iterrows()
+])
 
 # Yearly totals
 nieuwbouw_yearly = df_nieuwbouw.groupby(["jaar"]).agg({
@@ -107,12 +117,11 @@ nieuwbouw_yearly = df_nieuwbouw.groupby(["jaar"]).agg({
     "woonoppervlakte_m2": "sum"
 }).reset_index().sort_values("jaar")
 
-with open(RESULTS_DIR / "nieuwbouw_yearly.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "p": int(r["aantal_projecten"]), "g": int(r["aantal_gebouwen"]),
-         "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
-        for _, r in nieuwbouw_yearly.iterrows()
-    ], f)
+write_json("nieuwbouw_yearly.json", [
+    {"y": int(r["jaar"]), "p": int(r["aantal_projecten"]), "g": int(r["aantal_gebouwen"]),
+     "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
+    for _, r in nieuwbouw_yearly.iterrows()
+])
 
 # By type - yearly
 nieuwbouw_by_type = df_nieuwbouw.groupby(["jaar", "functie_kort"]).agg({
@@ -122,12 +131,11 @@ nieuwbouw_by_type = df_nieuwbouw.groupby(["jaar", "functie_kort"]).agg({
     "woonoppervlakte_m2": "sum"
 }).reset_index().sort_values(["jaar", "functie_kort"])
 
-with open(RESULTS_DIR / "nieuwbouw_by_type.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "t": r["functie_kort"], "p": int(r["aantal_projecten"]),
-         "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
-        for _, r in nieuwbouw_by_type.iterrows()
-    ], f)
+write_json("nieuwbouw_by_type.json", [
+    {"y": int(r["jaar"]), "t": r["functie_kort"], "p": int(r["aantal_projecten"]),
+     "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
+    for _, r in nieuwbouw_by_type.iterrows()
+])
 
 # ============================================================================
 # SECTION 2: VERBOUW (Renovation)
@@ -143,12 +151,11 @@ verbouw_quarterly = df_verbouw.groupby(["jaar", "kwartaal_nr"]).agg({
     "woonoppervlakte_m2": "sum"
 }).reset_index().sort_values(["jaar", "kwartaal_nr"])
 
-with open(RESULTS_DIR / "verbouw_quarterly.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "q": int(r["kwartaal_nr"]), "p": int(r["aantal_projecten"]),
-         "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
-        for _, r in verbouw_quarterly.iterrows()
-    ], f)
+write_json("verbouw_quarterly.json", [
+    {"y": int(r["jaar"]), "q": int(r["kwartaal_nr"]), "p": int(r["aantal_projecten"]),
+     "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
+    for _, r in verbouw_quarterly.iterrows()
+])
 
 # Yearly totals
 verbouw_yearly = df_verbouw.groupby(["jaar"]).agg({
@@ -158,12 +165,11 @@ verbouw_yearly = df_verbouw.groupby(["jaar"]).agg({
     "woonoppervlakte_m2": "sum"
 }).reset_index().sort_values("jaar")
 
-with open(RESULTS_DIR / "verbouw_yearly.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "p": int(r["aantal_projecten"]), "g": int(r["aantal_gebouwen"]),
-         "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
-        for _, r in verbouw_yearly.iterrows()
-    ], f)
+write_json("verbouw_yearly.json", [
+    {"y": int(r["jaar"]), "p": int(r["aantal_projecten"]), "g": int(r["aantal_gebouwen"]),
+     "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
+    for _, r in verbouw_yearly.iterrows()
+])
 
 # By type - yearly
 verbouw_by_type = df_verbouw.groupby(["jaar", "functie_kort"]).agg({
@@ -173,12 +179,11 @@ verbouw_by_type = df_verbouw.groupby(["jaar", "functie_kort"]).agg({
     "woonoppervlakte_m2": "sum"
 }).reset_index().sort_values(["jaar", "functie_kort"])
 
-with open(RESULTS_DIR / "verbouw_by_type.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "t": r["functie_kort"], "p": int(r["aantal_projecten"]),
-         "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
-        for _, r in verbouw_by_type.iterrows()
-    ], f)
+write_json("verbouw_by_type.json", [
+    {"y": int(r["jaar"]), "t": r["functie_kort"], "p": int(r["aantal_projecten"]),
+     "g": int(r["aantal_gebouwen"]), "w": int(r["aantal_wooneenheden"]), "m2": round(r["woonoppervlakte_m2"], 0)}
+    for _, r in verbouw_by_type.iterrows()
+])
 
 # ============================================================================
 # SECTION 3: SLOOP (Demolition)
@@ -194,12 +199,11 @@ sloop_quarterly = df_sloop.groupby(["jaar", "kwartaal_nr"]).agg({
     "gesloopt_m3": "sum"
 }).reset_index().sort_values(["jaar", "kwartaal_nr"])
 
-with open(RESULTS_DIR / "sloop_quarterly.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "q": int(r["kwartaal_nr"]), "p": int(r["aantal_projecten"]),
-         "g": int(r["aantal_gebouwen"]), "m2": round(r["gesloopt_m2"], 0), "m3": round(r["gesloopt_m3"], 0)}
-        for _, r in sloop_quarterly.iterrows()
-    ], f)
+write_json("sloop_quarterly.json", [
+    {"y": int(r["jaar"]), "q": int(r["kwartaal_nr"]), "p": int(r["aantal_projecten"]),
+     "g": int(r["aantal_gebouwen"]), "m2": round(r["gesloopt_m2"], 0), "m3": round(r["gesloopt_m3"], 0)}
+    for _, r in sloop_quarterly.iterrows()
+])
 
 # Yearly totals
 sloop_yearly = df_sloop.groupby(["jaar"]).agg({
@@ -209,12 +213,11 @@ sloop_yearly = df_sloop.groupby(["jaar"]).agg({
     "gesloopt_m3": "sum"
 }).reset_index().sort_values("jaar")
 
-with open(RESULTS_DIR / "sloop_yearly.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "p": int(r["aantal_projecten"]), "g": int(r["aantal_gebouwen"]),
-         "m2": round(r["gesloopt_m2"], 0), "m3": round(r["gesloopt_m3"], 0)}
-        for _, r in sloop_yearly.iterrows()
-    ], f)
+write_json("sloop_yearly.json", [
+    {"y": int(r["jaar"]), "p": int(r["aantal_projecten"]), "g": int(r["aantal_gebouwen"]),
+     "m2": round(r["gesloopt_m2"], 0), "m3": round(r["gesloopt_m3"], 0)}
+    for _, r in sloop_yearly.iterrows()
+])
 
 # By besluit type (who decides: gemeente, provincie, etc)
 sloop_by_besluit = df_sloop.groupby(["jaar", "besluit_type"]).agg({
@@ -224,12 +227,11 @@ sloop_by_besluit = df_sloop.groupby(["jaar", "besluit_type"]).agg({
     "gesloopt_m3": "sum"
 }).reset_index().sort_values(["jaar", "besluit_type"])
 
-with open(RESULTS_DIR / "sloop_by_besluit.json", "w") as f:
-    json.dump([
-        {"y": int(r["jaar"]), "b": r["besluit_type"], "p": int(r["aantal_projecten"]),
-         "g": int(r["aantal_gebouwen"]), "m2": round(r["gesloopt_m2"], 0), "m3": round(r["gesloopt_m3"], 0)}
-        for _, r in sloop_by_besluit.iterrows()
-    ], f)
+write_json("sloop_by_besluit.json", [
+    {"y": int(r["jaar"]), "b": r["besluit_type"], "p": int(r["aantal_projecten"]),
+     "g": int(r["aantal_gebouwen"]), "m2": round(r["gesloopt_m2"], 0), "m3": round(r["gesloopt_m3"], 0)}
+    for _, r in sloop_by_besluit.iterrows()
+])
 
 # ============================================================================
 # LOOKUPS for UI
@@ -250,8 +252,7 @@ lookups = {
     ]
 }
 
-with open(RESULTS_DIR / "lookups.json", "w") as f:
-    json.dump(lookups, f, ensure_ascii=False, indent=2)
+write_json("lookups.json", lookups, ensure_ascii=False, indent=2)
 
 # Print summary
 print("Processing complete!")

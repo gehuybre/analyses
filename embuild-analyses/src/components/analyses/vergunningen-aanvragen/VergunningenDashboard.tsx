@@ -150,7 +150,7 @@ function NieuwbouwSection() {
   const [metric, setMetric] = React.useState<MetricCode>("w")
 
   // Summary stats
-  const currentYear = 2024
+  const currentYear = 2025
   const current = (nieuwbouwYearly as YearlyRow[]).find((r) => r.y === currentYear)
   const prev = (nieuwbouwYearly as YearlyRow[]).find((r) => r.y === currentYear - 1)
   const change = current && prev ? ((current[metric] - prev[metric]) / prev[metric]) * 100 : 0
@@ -339,9 +339,9 @@ function NieuwbouwSection() {
           </Card>
           <Card className="col-span-2 md:col-span-1">
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">Totaal 2018-2024</div>
+              <div className="text-sm text-muted-foreground">Totaal 2018-2025</div>
               <div className="text-2xl font-bold">
-                {formatInt((nieuwbouwYearly as YearlyRow[]).filter((r) => r.y <= 2024).reduce((sum, r) => sum + r[metric], 0))}
+                {formatInt((nieuwbouwYearly as YearlyRow[]).filter((r) => r.y <= 2025).reduce((sum, r) => sum + r[metric], 0))}
               </div>
             </CardContent>
           </Card>
@@ -552,7 +552,7 @@ function NieuwbouwSection() {
 function VerbouwSection() {
   const [metric, setMetric] = React.useState<MetricCode>("w")
 
-  const currentYear = 2024
+  const currentYear = 2025
   const current = (verbouwYearly as YearlyRow[]).find((r) => r.y === currentYear)
   const prev = (verbouwYearly as YearlyRow[]).find((r) => r.y === currentYear - 1)
   const change = current && prev ? ((current[metric] - prev[metric]) / prev[metric]) * 100 : 0
@@ -688,9 +688,9 @@ function VerbouwSection() {
           </Card>
           <Card className="col-span-2 md:col-span-1">
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">Totaal 2018-2024</div>
+              <div className="text-sm text-muted-foreground">Totaal 2018-2025</div>
               <div className="text-2xl font-bold">
-                {formatInt((verbouwYearly as YearlyRow[]).filter((r) => r.y <= 2024).reduce((sum, r) => sum + r[metric], 0))}
+                {formatInt((verbouwYearly as YearlyRow[]).filter((r) => r.y <= 2025).reduce((sum, r) => sum + r[metric], 0))}
               </div>
             </CardContent>
           </Card>
@@ -872,7 +872,7 @@ function VerbouwSection() {
 function SloopSection() {
   const [metric, setMetric] = React.useState<SloopMetricCode>("m2")
 
-  const currentYear = 2024
+  const currentYear = 2025
   const current = (sloopYearly as SloopYearlyRow[]).find((r) => r.y === currentYear)
   const prev = (sloopYearly as SloopYearlyRow[]).find((r) => r.y === currentYear - 1)
   const change = current && prev ? ((current[metric] - prev[metric]) / prev[metric]) * 100 : 0
@@ -1005,9 +1005,9 @@ function SloopSection() {
           </Card>
           <Card className="col-span-2 md:col-span-1">
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">Totaal 2018-2024</div>
+              <div className="text-sm text-muted-foreground">Totaal 2018-2025</div>
               <div className="text-2xl font-bold">
-                {formatInt((sloopYearly as SloopYearlyRow[]).filter((r) => r.y <= 2024).reduce((sum, r) => sum + r[metric], 0))}
+                {formatInt((sloopYearly as SloopYearlyRow[]).filter((r) => r.y <= 2025).reduce((sum, r) => sum + r[metric], 0))}
               </div>
             </CardContent>
           </Card>
