@@ -222,7 +222,7 @@ function ChartSection({
                     onClick={() => toggleBuildingType(type)}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       selectedBuildingTypes.has(type)
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-gray-700 text-white hover:bg-gray-800'
                         : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
                   >
