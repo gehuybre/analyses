@@ -7,6 +7,7 @@ import { VastgoedVerkopenEmbed } from "@/components/analyses/vastgoed-verkopen/V
 import { FaillissementenEmbed } from "@/components/analyses/faillissementen/FaillissementenEmbed"
 import { HuishoudensgroeiEmbed } from "@/components/analyses/huishoudensgroei/HuishoudensgroeiEmbed"
 import { EnergiekaartPremiesEmbed } from "@/components/analyses/energiekaart-premies/EnergiekaartPremiesEmbed"
+import { EpcLabelverdelingDashboard } from "@/components/analyses/epc-labelverdeling/EpcLabelverdelingDashboard"
 import { VergunningenAanvragenEmbed } from "@/components/analyses/vergunningen-aanvragen/VergunningenAanvragenEmbed"
 import { GebouwenparkEmbed } from "@/components/analyses/gebouwenpark/GebouwenparkEmbed"
 import { InvesteringenEmbed } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenEmbed"
@@ -503,6 +504,11 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
           measure={urlParams.measure ?? undefined}
         />
       )
+    }
+
+    // Handle EpcLabelverdelingDashboard
+    if (config.component === "EpcLabelverdelingDashboard") {
+      return <EpcLabelverdelingDashboard />
     }
 
     // Handle GebouwenparkEmbed

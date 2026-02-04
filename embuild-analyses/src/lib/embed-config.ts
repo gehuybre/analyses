@@ -249,6 +249,35 @@ export const EMBED_CONFIGS: AnalysisEmbedConfig[] = [
     },
   },
   {
+    slug: "epc-labelverdeling",
+    sections: {
+      "residential-aa": {
+        type: "custom",
+        title: "Residentieel: Aandeel A+A",
+        component: "EpcLabelverdelingDashboard",
+        height: 600,
+      },
+      "non-residential-aa": {
+        type: "custom",
+        title: "Niet-residentieel: Aandeel A+A",
+        component: "EpcLabelverdelingDashboard",
+        height: 600,
+      },
+      "residential-ef": {
+        type: "custom",
+        title: "Residentieel: Aandeel E+F",
+        component: "EpcLabelverdelingDashboard",
+        height: 600,
+      },
+      "non-residential-ef": {
+        type: "custom",
+        title: "Niet-residentieel: Aandeel E+F",
+        component: "EpcLabelverdelingDashboard",
+        height: 600,
+      },
+    },
+  },
+  {
     slug: "vergunningen-aanvragen",
     sections: {
       nieuwbouw: {

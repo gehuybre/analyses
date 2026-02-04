@@ -184,9 +184,10 @@ export function ProjectFiltersComponent({
                     {municipalities.map((muni) => (
                       <CommandItem
                         key={muni.nis_code}
-                        value={muni.nis_code}
+                        value={muni.name}
                         onSelect={(currentValue) => {
-                          handleMunicipalityChange(currentValue)
+                          const nis_code = municipalities.find(m => m.name === currentValue)?.nis_code || currentValue
+                          handleMunicipalityChange(nis_code)
                           setMuniOpen(false)
                         }}
                       >
