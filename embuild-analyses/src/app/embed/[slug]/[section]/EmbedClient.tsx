@@ -7,7 +7,7 @@ import { VastgoedVerkopenEmbed } from "@/components/analyses/vastgoed-verkopen/V
 import { FaillissementenEmbed } from "@/components/analyses/faillissementen/FaillissementenEmbed"
 import { HuishoudensgroeiEmbed } from "@/components/analyses/huishoudensgroei/HuishoudensgroeiEmbed"
 import { EnergiekaartPremiesEmbed } from "@/components/analyses/energiekaart-premies/EnergiekaartPremiesEmbed"
-import { EpcLabelverdelingDashboard } from "@/components/analyses/epc-labelverdeling/EpcLabelverdelingDashboard"
+import { EpcLabelverdelingEmbed } from "@/components/analyses/epc-labelverdeling/EpcLabelverdelingEmbed"
 import { VergunningenAanvragenEmbed } from "@/components/analyses/vergunningen-aanvragen/VergunningenAanvragenEmbed"
 import { GebouwenparkEmbed } from "@/components/analyses/gebouwenpark/GebouwenparkEmbed"
 import { InvesteringenEmbed } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenEmbed"
@@ -506,9 +506,26 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
       )
     }
 
-    // Handle EpcLabelverdelingDashboard
-    if (config.component === "EpcLabelverdelingDashboard") {
-      return <EpcLabelverdelingDashboard />
+    // Handle EpcLabelverdelingEmbed
+    if (config.component === "EpcLabelverdelingEmbed") {
+      const validSections = getValidSections(slug)
+      if (!validSections.includes(section)) {
+        return (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">
+              Ongeldige sectie: {section}. Geldige opties: {validSections.join(", ")}
+            </p>
+          </div>
+        )
+      }
+
+      return (
+        <EpcLabelverdelingEmbed
+          section={section as "residential-aa" | "non-residential-aa" | "residential-ef" | "non-residential-ef"}
+          viewType={toChartOrTableViewType(urlParams.view)}
+          buildingTypes={urlParams.type}
+        />
+      )
     }
 
     // Handle GebouwenparkEmbed

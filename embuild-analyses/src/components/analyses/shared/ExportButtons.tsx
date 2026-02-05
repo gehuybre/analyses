@@ -143,10 +143,12 @@ export function ExportButtons({
     const config = getEmbedConfig(slug, sectionId)
     const height = config?.height ?? 500 // Default to 500px if not configured
 
-    // Get the base URL including basePath for GitHub Pages deployment
-    // basePath is set via NEXT_PUBLIC_BASE_PATH (e.g., /analyses for GitHub Pages)
+    // Get the base URL for embed routes
+    // Use environment variable (set at build time) instead of inferring from current URL
+    // This ensures embeds always work correctly on both localhost and GitHub Pages
+    const embedBasePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
     const baseUrl = typeof window !== "undefined"
-      ? window.location.origin + getBasePath()
+      ? window.location.origin + embedBasePath
       : ""
 
     // URL-encode slug and sectionId for security

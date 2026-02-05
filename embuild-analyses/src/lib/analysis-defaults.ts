@@ -324,6 +324,18 @@ const ANALYSIS_DEFAULTS = {
     selectedProvince: null,
     currentView: 'chart',
   },
+
+  /**
+   * EPC Labelverdeling (EPC Label Distribution)
+   *
+   * Defaults:
+   * - selectedCategory: null (all building types)
+   * - currentView: 'chart' (default to chart view)
+   */
+  'epc-labelverdeling': {
+    selectedCategory: null,
+    currentView: 'chart',
+  },
 } as const satisfies Record<string, AnalysisDefaults>
 
 export type AnalysisSlug = keyof typeof ANALYSIS_DEFAULTS

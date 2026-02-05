@@ -208,6 +208,9 @@ function ChartSection({
                   "Totaal",
                 ]}
                 valueLabel={shareType === "aa" ? "Aandeel A+A (%)" : "Aandeel E+F (%)"}
+                embedParams={{
+                  type: Array.from(selectedBuildingTypes).join(","),
+                }}
               />
             </div>
 
