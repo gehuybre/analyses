@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useEffect, useContext } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2 } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { ExportButtons } from "../shared/ExportButtons"
 import { formatCurrency } from "@/lib/number-formatters"
@@ -146,7 +146,17 @@ export function InvesteringenBVCategorySection() {
     return Array.from(nisCodesSet)
   }, [muniData, selectedYear])
 
-  // Category breakdown: Top 9 + Other
+  // State for expanded domains (to show subdomain info)
+  const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set())
+
+  // Category breakdown by domain with subdomein list
+  interface DomainData {
+    label: string
+    value: number
+    count: number
+    subdomainLabels: string[]
+  }
+
   const categoryData = useMemo(() => {
     if (!lookups || muniData.length === 0) return []
 
@@ -156,44 +166,42 @@ export function InvesteringenBVCategorySection() {
       filteredData = filteredData.filter(d => d.NIS_code === geoSelection.code)
     }
 
-    // Aggregate by Beleidsveld (highest detail level)
-    const byCategory: Record<string, { label: string; value: number; count: number }> = {}
+    // Aggregate by BV_domein (domain level) and collect subdomain names
+    const byDomain: Record<string, { label: string; value: number; count: number; subdomainSet: Set<string> }> = {}
 
     filteredData.forEach(record => {
-      const category = stripPrefix(record.Beleidsveld)
-      if (!byCategory[category]) {
-        byCategory[category] = { label: category, value: 0, count: 0 }
+      const domain = stripPrefix(record.BV_domein)
+      const subdomain = stripPrefix(record.BV_subdomein)
+
+      if (!byDomain[domain]) {
+        byDomain[domain] = { label: domain, value: 0, count: 0, subdomainSet: new Set() }
       }
-      byCategory[category].value += record[selectedMetric]
-      byCategory[category].count += 1
+
+      byDomain[domain].value += record[selectedMetric]
+      byDomain[domain].count += 1
+      byDomain[domain].subdomainSet.add(subdomain)
     })
 
-    // For Per_inwoner metric, calculate average across municipalities (not sum)
-    // Why: Per_inwoner values are already normalized per municipality population.
-    // Summing them would be meaningless - we need the average to show typical spending.
+    // For Per_inwoner metric, calculate average across municipalities
     if (selectedMetric === 'Per_inwoner') {
-      Object.values(byCategory).forEach(cat => {
-        if (cat.count > 0) {
-          cat.value = cat.value / cat.count
+      Object.values(byDomain).forEach(domain => {
+        if (domain.count > 0) {
+          domain.value = domain.value / domain.count
         }
       })
     }
 
-    // Sort by value descending
-    const sorted = Object.values(byCategory).sort((a, b) => b.value - a.value)
+    // Sort domains by value descending and format with subdomain list
+    const sorted = Object.values(byDomain)
+      .map(domain => ({
+        label: domain.label,
+        value: domain.value,
+        count: domain.count,
+        subdomainLabels: Array.from(domain.subdomainSet).sort()
+      }))
+      .sort((a, b) => b.value - a.value)
 
-    // Top 9 + Other
-    const top9 = sorted.slice(0, 9)
-    const other = sorted.slice(9)
-
-    const result = [...top9]
-    if (other.length > 0) {
-      const otherSum = other.reduce((sum, item) => sum + item.value, 0)
-      const otherCount = other.reduce((sum, item) => sum + item.count, 0)
-      result.push({ label: 'Overige', value: otherSum, count: otherCount })
-    }
-
-    return result
+    return sorted as DomainData[]
   }, [lookups, muniData, selectedYear, geoSelection, selectedMetric])
 
   // Calculate max value across ALL years for consistent bar chart scaling
@@ -204,41 +212,34 @@ export function InvesteringenBVCategorySection() {
     let globalMax = 1
 
     years.forEach(year => {
-      // Filter by year and municipality (same logic as categoryData)
+      // Filter by year and municipality
       let filteredData = muniData.filter(d => d.Rapportjaar === year)
       if (geoSelection.type === 'municipality' && geoSelection.code) {
         filteredData = filteredData.filter(d => d.NIS_code === geoSelection.code)
       }
 
-      // Aggregate by Beleidsveld
-      const byCategory: Record<string, { value: number; count: number }> = {}
+      // Aggregate by BV_domein
+      const byDomain: Record<string, { value: number; count: number }> = {}
       filteredData.forEach(record => {
-        const category = stripPrefix(record.Beleidsveld)
-        if (!byCategory[category]) {
-          byCategory[category] = { value: 0, count: 0 }
+        const domain = stripPrefix(record.BV_domein)
+        if (!byDomain[domain]) {
+          byDomain[domain] = { value: 0, count: 0 }
         }
-        byCategory[category].value += record[selectedMetric]
-        byCategory[category].count += 1
+        byDomain[domain].value += record[selectedMetric]
+        byDomain[domain].count += 1
       })
 
       // For Per_inwoner, calculate average
       if (selectedMetric === 'Per_inwoner') {
-        Object.values(byCategory).forEach(cat => {
-          if (cat.count > 0) {
-            cat.value = cat.value / cat.count
+        Object.values(byDomain).forEach(domain => {
+          if (domain.count > 0) {
+            domain.value = domain.value / domain.count
           }
         })
       }
 
-      // Get top 9 + other
-      const sorted = Object.values(byCategory).map(c => c.value).sort((a, b) => b - a)
-      const top9 = sorted.slice(0, 9)
-      const other = sorted.slice(9)
-      const values = [...top9]
-      if (other.length > 0) {
-        values.push(other.reduce((sum, val) => sum + val, 0))
-      }
-
+      // Get all domain values
+      const values = Object.values(byDomain).map(d => d.value)
       const yearMax = Math.max(...values, 1)
       globalMax = Math.max(globalMax, yearMax)
     })
@@ -276,7 +277,7 @@ export function InvesteringenBVCategorySection() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Verdeling per beleidsveld (BV)</CardTitle>
+            <CardTitle>Verdeling per beleidsdomein (BV)</CardTitle>
             <div className="flex items-center gap-4">
               {loadedChunks < totalChunks && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
@@ -285,7 +286,7 @@ export function InvesteringenBVCategorySection() {
                 </div>
               )}
               <ExportButtons
-                title="Verdeling per beleidsveld"
+                title="Verdeling per beleidsdomein"
                 slug="gemeentelijke-investeringen"
                 sectionId="bv-category-breakdown"
                 viewType="table"
@@ -294,7 +295,7 @@ export function InvesteringenBVCategorySection() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            Top 9 beleidsvel den met hoogste investeringen + overige categorieën.
+            Investeringen per beleidsdomein. Klik op een domein om te zien welke subdomeinen het bevat.
           </p>
         </CardHeader>
         <CardContent>
@@ -352,36 +353,72 @@ export function InvesteringenBVCategorySection() {
             </div>
 
             {/* Category breakdown */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               {categoryData.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground italic">
                   Geen data beschikbaar voor deze selectie.
                 </div>
               ) : (
-                categoryData.map((item, index) => (
-                  <div key={item.label} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">
-                        {index + 1}. {item.label}
-                      </span>
-                      <span className="font-bold text-sm">
-                        {selectedMetric === 'Totaal'
-                          ? formatCurrency(item.value)
-                          : `€ ${item.value.toFixed(2)}`
-                        }
-                      </span>
+                categoryData.map((domain, index) => {
+                  const isExpanded = expandedDomains.has(domain.label)
+                  const toggleExpand = () => {
+                    const newExpanded = new Set(expandedDomains)
+                    if (isExpanded) {
+                      newExpanded.delete(domain.label)
+                    } else {
+                      newExpanded.add(domain.label)
+                    }
+                    setExpandedDomains(newExpanded)
+                  }
+
+                  return (
+                    <div key={domain.label} className="border rounded-lg p-3 space-y-2">
+                      <button
+                        type="button"
+                        onClick={toggleExpand}
+                        className="w-full text-left hover:bg-muted/50 transition-colors p-2 -m-2 rounded"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-5">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
+                            <span className="font-medium text-sm">
+                              {index + 1}. {domain.label}
+                            </span>
+                          </div>
+                          <span className="font-bold text-sm">
+                            {selectedMetric === 'Totaal'
+                              ? formatCurrency(domain.value)
+                              : `€ ${domain.value.toFixed(2)}`
+                            }
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Bar chart */}
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all bg-blue-500"
+                          style={{ width: `${(domain.value / maxValue) * 100}%` }}
+                        />
+                      </div>
+
+                      {/* Subdomain info */}
+                      {isExpanded && domain.subdomainLabels.length > 0 && (
+                        <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
+                          <p>
+                            <span className="font-semibold text-foreground">Subdomeinen:</span> {domain.subdomainLabels.join(', ')}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          item.label === 'Overige' ? "bg-gray-400" : "bg-blue-500"
-                        )}
-                        style={{ width: `${(item.value / maxValue) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
 

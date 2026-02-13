@@ -12,6 +12,18 @@ interface ProjectCardProps {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
+  "00-algemene-financiering": "Algemene financiering",
+  "01-algemeen-bestuur": "Algemeen bestuur",
+  "02-mobiliteit": "Zich verplaatsen en mobiliteit",
+  "03-natuur-milieu": "Natuur en milieubeheer",
+  "04-veiligheidszorg": "Veiligheidszorg",
+  "05-ondernemen-werken": "Ondernemen en werken",
+  "06-wonen-ruimte": "Wonen en ruimtelijke ordening",
+  "07-cultuur-vrije-tijd": "Cultuur en vrije tijd",
+  "08-onderwijs": "Leren en onderwijs",
+  "09-zorg-opvang": "Zorg en opvang",
+  "overige": "Overige",
+  // Legacy mappings (in case any old data exists)
   "wegenbouw": "wegenbouw",
   "riolering": "riolering",
   "scholenbouw": "scholenbouw",
@@ -21,8 +33,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   "verlichting": "verlichting",
   "groen": "groen",
   "ruimtelijke-ordening": "ruimtelijke ordening",
-  "zorg": "zorg",
-  "overige": "overige"
+  "zorg": "zorg"
 }
 
 export function ProjectCard({ project, onClick }: ProjectCardProps) {

@@ -115,8 +115,6 @@ export function InvesteringenBVSection() {
   const [error, setError] = useState<string | null>(null)
 
   const [selectedDomain, setSelectedDomain] = useState<string>('')
-  const [selectedSubdomein, setSelectedSubdomein] = useState<string>('')
-  const [selectedBeleidsveld, setSelectedBeleidsveld] = useState<string>('')
   const [selectedMetric, setSelectedMetric] = useState<'Totaal' | 'Per_inwoner'>('Totaal')
   const [geoSelection, setGeoSelection] = useState<{
     type: 'all' | 'region' | 'province' | 'arrondissement' | 'municipality'
@@ -192,25 +190,14 @@ export function InvesteringenBVSection() {
     return lookups.domains.map(d => stripPrefix(d.BV_domein)).sort()
   }, [lookups])
 
-  const subdomeinOptions = useMemo(() => {
-    if (!lookups) return []
-    let options = lookups.subdomeins
-    if (selectedDomain) {
-      // Match by stripped prefix
-      options = options.filter(s => stripPrefix(s.BV_domein) === selectedDomain)
-    }
-    return options.map(s => stripPrefix(s.BV_subdomein)).sort()
+  // Get subdomains for the selected domain
+  const selectedDomainSubdomains = useMemo(() => {
+    if (!lookups || !selectedDomain) return []
+    return lookups.subdomeins
+      .filter(s => stripPrefix(s.BV_domein) === selectedDomain)
+      .map(s => stripPrefix(s.BV_subdomein))
+      .sort()
   }, [lookups, selectedDomain])
-
-  const beleidsveldOptions = useMemo(() => {
-    if (!lookups) return []
-    let options = lookups.beleidsvelds
-    if (selectedSubdomein) {
-      // Match by stripped prefix
-      options = options.filter(b => stripPrefix(b.BV_subdomein) === selectedSubdomein)
-    }
-    return options.map(b => stripPrefix(b.Beleidsveld)).sort()
-  }, [lookups, selectedSubdomein])
 
   // Filter data based on BV selections (without geo filter)
   // Match by stripped labels since user sees stripped versions
@@ -220,15 +207,9 @@ export function InvesteringenBVSection() {
     if (selectedDomain) {
       data = data.filter(d => stripPrefix(d.BV_domein) === selectedDomain)
     }
-    if (selectedSubdomein) {
-      data = data.filter(d => stripPrefix(d.BV_subdomein) === selectedSubdomein)
-    }
-    if (selectedBeleidsveld) {
-      data = data.filter(d => stripPrefix(d.Beleidsveld) === selectedBeleidsveld)
-    }
 
     return data
-  }, [muniData, selectedDomain, selectedSubdomein, selectedBeleidsveld])
+  }, [muniData, selectedDomain])
 
   // Filter data based on selections (including geo filter)
   const filteredData = useMemo(() => {
@@ -472,7 +453,7 @@ export function InvesteringenBVSection() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            Filter op domein, subdomein en beleidsveld om de investeringen per gemeente te bekijken.
+            Filter op beleidsdomein om de investeringen per gemeente te bekijken.
           </p>
         </CardHeader>
         <CardContent>
@@ -503,34 +484,19 @@ export function InvesteringenBVSection() {
               />
               <HierarchicalFilter
                 value={selectedDomain}
-                onChange={(v) => {
-                  setSelectedDomain(v)
-                  setSelectedSubdomein('')
-                  setSelectedBeleidsveld('')
-                }}
+                onChange={setSelectedDomain}
                 options={domainOptions}
                 placeholder="Selecteer domein"
               />
-              {selectedDomain && (
-                <HierarchicalFilter
-                  value={selectedSubdomein}
-                  onChange={(v) => {
-                    setSelectedSubdomein(v)
-                    setSelectedBeleidsveld('')
-                  }}
-                  options={subdomeinOptions}
-                  placeholder="Selecteer subdomein"
-                />
-              )}
-              {selectedSubdomein && (
-                <HierarchicalFilter
-                  value={selectedBeleidsveld}
-                  onChange={setSelectedBeleidsveld}
-                  options={beleidsveldOptions}
-                  placeholder="Selecteer beleidsveld"
-                />
-              )}
             </div>
+
+            {selectedDomain && selectedDomainSubdomains.length > 0 && (
+              <div className="bg-muted/50 p-3 rounded border text-sm">
+                <p>
+                  <span className="font-semibold">Dit domein bevat:</span> {selectedDomainSubdomains.join(', ')}
+                </p>
+              </div>
+            )}
 
             <Tabs defaultValue="chart" className="w-full">
               <TabsList>

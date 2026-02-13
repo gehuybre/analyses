@@ -12,279 +12,90 @@ Each category has:
 - policy_domains: mapping of Beleidsdomein codes to subdomains (policy-based)
 """
 
-# Policy domain to category mapping
-# Maps both full Beleidssubdomein text and numeric codes to project categories
-# Priority is given to full text matches over numeric code prefixes
+# Direct Beleidsdomein to category mapping
+# Maps the 10 main Beleidsdomein values directly (identity mapping)
 POLICY_DOMAIN_MAPPING = {
-    # WEGENBOUW (Mobility & Transportation) - 02 domain
-    "02 Zich verplaatsen en mobiliteit": "wegenbouw",
-    "02": "wegenbouw",
+    "00 Algemene financiering": "00-algemene-financiering",
+    "00": "00-algemene-financiering",
 
-    # RIOLERING (Water Management) - 031
-    "031 Waterbeheer": "riolering",
-    "031": "riolering",
-    "03 Natuur en milieubeheer": "groen",
-    "03": "groen",
+    "01 Algemeen bestuur": "01-algemeen-bestuur",
+    "01": "01-algemeen-bestuur",
 
-    # GROENE RUIMTE & NATUUR (Green Space & Environment)
-    "068 Groene ruimte": "groen",
-    "068": "groen",
-    "034 Bescherming van biodiversiteit, landschappen en bodem": "groen",
-    "034": "groen",
-    "030 Afval- en materialenbeheer": "groen",
-    "030": "groen",
-    "032 Vermindering van de milieuverontreiniging": "groen",
-    "032": "groen",
-    "035 Klimaat en energie": "gebouwen",  # Energy efficiency buildings
-    "035": "gebouwen",
-    "038/9 Overige milieubescherming": "groen",
-    "038": "groen",
-    "039": "groen",
+    "02 Zich verplaatsen en mobiliteit": "02-mobiliteit",
+    "02": "02-mobiliteit",
 
-    # BEGRAAFPLAATSEN (Cemeteries - part of green space/cultural)
-    "099 Begraafplaatsen, crematoria en lijkbezorging": "groen",
-    "099": "groen",
+    "03 Natuur en milieubeheer": "03-natuur-milieu",
+    "03": "03-natuur-milieu",
 
-    # CULTUUR (Culture & Recreation) - 07 domain
-    "07 Cultuur en vrije tijd": "cultuur",
-    "07": "cultuur",
-    "070 Culturele instellingen": "cultuur",
-    "070": "cultuur",
-    "071 Evenementen": "cultuur",
-    "071": "cultuur",
-    "072 Erfgoed": "cultuur",
-    "072": "cultuur",
-    "073 Overig kunst- en cultuurbeleid": "cultuur",
-    "073": "cultuur",
-    "074 Sport": "sport",
-    "074": "sport",
-    "075 Jeugd": "zorg",  # Youth programs part of social care
-    "075": "zorg",
-    "079 Erediensten en niet-confessionele levensbeschouwelijke gemeenschappen": "cultuur",
-    "079": "cultuur",
-    "052 Toerisme": "cultuur",
-    "052": "cultuur",
+    "04 Veiligheidszorg": "04-veiligheidszorg",
+    "04": "04-veiligheidszorg",
 
-    # SCHOLENBOUW (Education) - 08 domain
-    "08 Leren en onderwijs": "scholenbouw",
-    "08": "scholenbouw",
-    "080 Basisonderwijs": "scholenbouw",
-    "080": "scholenbouw",
-    "081 Secundair onderwijs": "scholenbouw",
-    "081": "scholenbouw",
-    "082 Deeltijds kunstonderwijs": "scholenbouw",
-    "082": "scholenbouw",
-    "083 Hoger en Volwassenenonderwijs": "scholenbouw",
-    "083": "scholenbouw",
-    "086 Ondersteunende diensten voor het onderwijs": "scholenbouw",
-    "086": "scholenbouw",
-    "087/8 Algemeen onderwijsbeleid": "scholenbouw",
-    "087": "scholenbouw",
-    "088": "scholenbouw",
+    "05 Ondernemen en werken": "05-ondernemen-werken",
+    "05": "05-ondernemen-werken",
 
-    # ZORG (Social Care & Health) - 09 domain
-    "09 Zorg en opvang": "zorg",
-    "09": "zorg",
-    "090 Sociaal beleid": "zorg",
-    "090": "zorg",
-    "091 Ziekte- en invaliditeit": "zorg",
-    "091": "zorg",
-    "093 Sociale huisvesting": "zorg",
-    "093": "zorg",
-    "094 Gezin en kinderen": "zorg",
-    "094": "zorg",
-    "095 Ouderen": "zorg",
-    "095": "zorg",
-    "098 Dienstverlening inzake volksgezondheid": "zorg",
-    "098": "zorg",
+    "06 Wonen en ruimtelijke ordening": "06-wonen-ruimte",
+    "06": "06-wonen-ruimte",
 
-    # VEILIGHEID (Safety & Security) - 04 domain
-    "04 Veiligheidszorg": "veiligheid",
-    "04": "veiligheid",
-    "040 Politiediensten": "veiligheid",
-    "040": "veiligheid",
-    "041 Brandweer": "veiligheid",
-    "041": "veiligheid",
-    "042/4 Overige hulpdiensten": "veiligheid",
-    "042": "veiligheid",
-    "045/9 Overige elementen van openbare orde en veiligheid": "veiligheid",
-    "045": "veiligheid",
+    "07 Cultuur en vrije tijd": "07-cultuur-vrije-tijd",
+    "07": "07-cultuur-vrije-tijd",
 
-    # RUIMTELIJKE ORDENING (Spatial Planning) - 06 domain
-    "06 Wonen en ruimtelijke ordening": "gebouwen",
-    "06": "gebouwen",
-    "060 Ruimtelijke planning": "ruimtelijke-ordening",
-    "060": "ruimtelijke-ordening",
-    "061 Gebiedsontwikkeling": "ruimtelijke-ordening",
-    "061": "ruimtelijke-ordening",
+    "08 Leren en onderwijs": "08-onderwijs",
+    "08": "08-onderwijs",
 
-    # VERLICHTING (Lighting) - 067
-    "067 Straatverlichting": "verlichting",
-    "067": "verlichting",
-
-    # GEBOUWEN (Buildings & Utilities) - 062, utilities
-    "062 Woonbeleid": "gebouwen",
-    "062": "gebouwen",
-    "063 Watervoorziening": "gebouwen",
-    "063": "gebouwen",
-    "064 Elektriciteitsvoorziening": "gebouwen",
-    "064": "gebouwen",
-    "065 Gasvoorziening": "gebouwen",
-    "065": "gebouwen",
-    "066 Communicatievoorzieningen": "gebouwen",
-    "066": "gebouwen",
-    "069 Overige nutsvoorzieningen": "gebouwen",
-    "069": "gebouwen",
-
-    # WERKING (Organization, Operations & Administration) - 0X domain
-    "00 Algemene financiering": "werking",
-    "00": "werking",
-    "010 Politieke organen": "werking",
-    "010": "werking",
-    "011 Algemene diensten": "werking",
-    "011": "werking",
-    "013 Administratieve dienstverlening": "werking",
-    "013": "werking",
-    "015 Internationale samenwerking": "werking",
-    "015": "werking",
-    "016 Hulp aan het buitenland": "werking",
-    "016": "werking",
-    "017 Binnengemeentelijke decentralisatie": "werking",
-    "017": "werking",
-    "019 Overig algemeen bestuur": "werking",
-    "019": "werking",
-
-    # ECONOMIE & LANDBOUW (Economic Affairs - mapped to werking as support functions)
-    "050 Handel en middenstand": "werking",
-    "050": "werking",
-    "051 Nijverheid": "werking",
-    "051": "werking",
-    "053 Land-, tuin- en bosbouw": "werking",
-    "053": "werking",
-    "054 Visvangst": "werking",
-    "054": "werking",
-    "055 Werkgelegenheid": "werking",
-    "055": "werking",
-    "059 Overige economische zaken": "werking",
-    "059": "werking",
+    "09 Zorg en opvang": "09-zorg-opvang",
+    "09": "09-zorg-opvang",
 }
 
 CATEGORY_DEFINITIONS = {
-    "wegenbouw": {
-        "id": "wegenbouw",
-        "label": "wegenbouw",
-        "keywords": [
-            "weg", "straat", "voetpad", "fietspad", "brug", "rijweg",
-            "asfalt", "verharding", "verkeers", "parking", "parkeer",
-            "rotonde", "kruispunt", "viaduct", "tunnel", "onderdoorgang",
-            "oversteek", "zebrapad", "mobiliteit", "infrastructuur"
-        ]
+    "00-algemene-financiering": {
+        "id": "00-algemene-financiering",
+        "label": "Algemene financiering",
+        "keywords": []  # Using policy domain classification
     },
-    "riolering": {
-        "id": "riolering",
-        "label": "riolering",
-        "keywords": [
-            "riolering", "afvalwater", "zuivering", "waterloop", "drainage",
-            "septische", "hemelwater", "riool", "waterzuivering", "gracht",
-            "beek", "afvoer", "drainage", "waterbeheersing", "overstromings"
-        ]
+    "01-algemeen-bestuur": {
+        "id": "01-algemeen-bestuur",
+        "label": "Algemeen bestuur",
+        "keywords": []  # Using policy domain classification
     },
-    "scholenbouw": {
-        "id": "scholenbouw",
-        "label": "scholenbouw",
-        "keywords": [
-            "school", "basisonderwijs", "secundair onderwijs", "kleuterschool",
-            "leslokaal", "onderwijsinfra", "schoolgebouw", "klaslokaal",
-            "schoolplein", "kleuterklas"
-        ]
+    "02-mobiliteit": {
+        "id": "02-mobiliteit",
+        "label": "Zich verplaatsen en mobiliteit",
+        "keywords": []  # Using policy domain classification
     },
-    "sport": {
-        "id": "sport",
-        "label": "sport",
-        "keywords": [
-            "sport", "sportzaal", "voetbal", "zwembad", "atletiek",
-            "tennisbaan", "sporthal", "fitnessruimte", "sportinfra",
-            "sportterrein", "speelveld", "sportcomplex", "sportveld",
-            "petanque", "skatepark"
-        ]
+    "03-natuur-milieu": {
+        "id": "03-natuur-milieu",
+        "label": "Natuur en milieubeheer",
+        "keywords": []  # Using policy domain classification
     },
-    "cultuur": {
-        "id": "cultuur",
-        "label": "cultuur",
-        "keywords": [
-            "cultu", "bibliotheek", "museum", "gemeenschapscentrum",
-            "jeugdhuis", "theater", "erfgoed", "monument", "kunstcent",
-            "zaal", "feestzaal", "cultureel centrum", "historic",
-            "herbestemming", "restauratie", "kapel", "evenement", "evenementen", "toerisme", "toeristische", "vrijetijd"
-        ]
+    "04-veiligheidszorg": {
+        "id": "04-veiligheidszorg",
+        "label": "Veiligheidszorg",
+        "keywords": []  # Using policy domain classification
     },
-    "gebouwen": {
-        "id": "gebouwen",
-        "label": "gebouwen",
-        "keywords": [
-            "gemeentehuis", "administratief centrum", "stadsgebouw",
-            "dienstencentrum", "politiepost", "brandweer", "stadskantoor",
-            "administratiegebouw", "kantoorruimte",
-            "patrimonium", "patrimoniumbeheer", "verduurzaming", "verduurzamen",
-            "renovatie", "renovaties", "energie-audit", "energiezuinig", "energie", "klimaat"
-        ]
+    "05-ondernemen-werken": {
+        "id": "05-ondernemen-werken",
+        "label": "Ondernemen en werken",
+        "keywords": []  # Using policy domain classification
     },
-    "werking": {
-        "id": "werking",
-        "label": "organisatie & werking",
-        "keywords": [
-            "werking", "ondersteunen", "ondersteuning", "dienst", "diensten",
-            "dienstverlening", "materiaal", "materieel", "voertuig", "voertuigen",
-            "magazijn", "garage", "uitrusting", "gereedschap", "onderhoud", "beheer",
-            "medewerkers", "personeel", "hr", "ict", "digitaal", "digitale", "communicatie", "subsidie", "subsidies", "verenigingen", "financieel", "financiële", "middelen", "interne", "klantgericht"
-        ]
+    "06-wonen-ruimte": {
+        "id": "06-wonen-ruimte",
+        "label": "Wonen en ruimtelijke ordening",
+        "keywords": []  # Using policy domain classification
     },
-
-    "veiligheid": {
-        "id": "veiligheid",
-        "label": "veiligheid",
-        "keywords": [
-            "politie", "hulpverleningszone", "veiligheid", "kazerne", "nooddiensten",
-            "hulpdienst", "brandweer"
-        ]
+    "07-cultuur-vrije-tijd": {
+        "id": "07-cultuur-vrije-tijd",
+        "label": "Cultuur en vrije tijd",
+        "keywords": []  # Using policy domain classification
     },
-    "verlichting": {
-        "id": "verlichting",
-        "label": "verlichting",
-        "keywords": [
-            "straatverlichting", "verlichtingstoestel", "verkeerslicht",
-            "signalisatie", "led", "lichtmast", "openbare verlichting",
-            "verkeersbordenplan", "bebording", "verkeerssignalisatie"
-        ]
+    "08-onderwijs": {
+        "id": "08-onderwijs",
+        "label": "Leren en onderwijs",
+        "keywords": []  # Using policy domain classification
     },
-    "groen": {
-        "id": "groen",
-        "label": "groen",
-        "keywords": [
-            "park", "groen", "natuur", "beplanting", "begraafplaats",
-            "speeltuin", "recreatie", "wandelpad", "bos", "plantso",
-            "bomen", "groenvoorziening", "natuurgebied", "recreatiedomein",
-            "kerkhof", "begraafwezen"
-        ]
-    },
-    "ruimtelijke-ordening": {
-        "id": "ruimtelijke-ordening",
-        "label": "ruimtelijke ordening",
-        "keywords": [
-            "ruimtelijke", "herinrichting", "gebiedsontwikkeling",
-            "stadsvernieuwing", "brownfield", "ruimtelijke ordening",
-            "stedenbouw", "onteigening", "verkaveling", "bestemmingsplan"
-        ]
-    },
-    "zorg": {
-        "id": "zorg",
-        "label": "zorg",
-        "keywords": [
-            "woonzorgcentrum", "rusthuis", "zorg", "kinderopvang", "crèche",
-            "wzc", "rustord", "woonzorg", "dagverzorging", "opvang",
-            "sociale", "welzijn", "voedsel", "voedselverdeling", "sociaal huis",
-            "jeugd", "participatie", "kwetsbaar", "kwetsbare"
-        ]
+    "09-zorg-opvang": {
+        "id": "09-zorg-opvang",
+        "label": "Zorg en opvang",
+        "keywords": []  # Using policy domain classification
     }
 }
 
@@ -473,46 +284,44 @@ def get_category_investment_summary(projects, category_id, top_n=5):
 def generate_category_description(projects):
     """
     Generate a human-readable description of all project categories with counts.
-    
+    Based on the 10 official Beleidsdomein categories.
+
     Args:
         projects: list of project dicts with 'categories' field
-        
+
     Returns:
         str: Formatted description text for use in blog posts
     """
     summaries = summarize_projects_by_category(projects)
-    
-    # Define category order and short descriptions
+
+    # Define category order (by domein code)
     category_info = [
-        ("wegenbouw", "wegen, straten, fietspaden, bruggen"),
-        ("groen", "parken, natuurgebieden, recreatie"),
-        ("zorg", "woonzorgcentra, rusthuizen, kinderopvang"),
-        ("riolering", "riolering, afvalwater, drainage"),
-        ("cultuur", "bibliotheken, gemeenschapscentra, musea"),
-        ("sport", "sportzalen, voetbalvelden, zwembaden"),
-        ("scholenbouw", "scholen, kleuterscholen, leslokalen"),
-        ("verlichting", "straatverlichting, verkeerslichten"),
-        ("ruimtelijke-ordening", "herinrichting, gebiedsontwikkeling"),
-        ("gebouwen", "gemeentehuizen, administratieve centra"),
-        ("veiligheid", "politie, brandweer, nooddiensten"),
-        ("werking", "organisatie, materieel, dienstverlening"),
+        ("00-algemene-financiering", "00 Algemene financiering"),
+        ("01-algemeen-bestuur", "01 Algemeen bestuur"),
+        ("02-mobiliteit", "02 Zich verplaatsen en mobiliteit"),
+        ("03-natuur-milieu", "03 Natuur en milieubeheer"),
+        ("04-veiligheidszorg", "04 Veiligheidszorg"),
+        ("05-ondernemen-werken", "05 Ondernemen en werken"),
+        ("06-wonen-ruimte", "06 Wonen en ruimtelijke ordening"),
+        ("07-cultuur-vrije-tijd", "07 Cultuur en vrije tijd"),
+        ("08-onderwijs", "08 Leren en onderwijs"),
+        ("09-zorg-opvang", "09 Zorg en opvang"),
     ]
-    
-    lines = ["Projecten zijn automatisch ingedeeld in bouwsectoren op basis van projectbeschrijvingen:\n"]
-    
+
+    lines = ["Projecten zijn automatisch ingedeeld op basis van hun beleidsdomein:\n"]
+
     # Add categories with counts
-    for cat_id, description in category_info:
+    for cat_id, label in category_info:
         count = summaries.get(cat_id, {}).get('project_count', 0)
         if count > 0:
-            label = summaries[cat_id]['label']
             # Format number with dot as thousands separator (Dutch style)
             count_formatted = f"{count:,}".replace(',', '.')
-            lines.append(f"- **{label}** ({count_formatted} projecten) - {description}")
-    
+            lines.append(f"- **{label}** ({count_formatted} projecten)")
+
     # Add "overige" at the end
     overige_count = summaries.get('overige', {}).get('project_count', 0)
     if overige_count > 0:
         count_formatted = f"{overige_count:,}".replace(',', '.')
-        lines.append(f"- **overige** ({count_formatted} projecten) - projecten die niet in bovenstaande categorieën passen")
-    
+        lines.append(f"- **overige** ({count_formatted} projecten) - projecten zonder beleidsdomein")
+
     return '\n'.join(lines)
