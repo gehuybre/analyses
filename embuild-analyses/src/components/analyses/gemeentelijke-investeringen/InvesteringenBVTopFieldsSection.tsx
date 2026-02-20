@@ -47,6 +47,15 @@ interface BVRecord {
   Per_inwoner: number
 }
 
+type TopFieldsViewType = 'chart' | 'table' | 'map'
+
+interface InvesteringenBVTopFieldsSectionProps {
+  viewType?: TopFieldsViewType
+  metric?: string | null
+  municipality?: string | null
+  field?: string | null
+}
+
 // Top 9 policy fields by total investment (all years combined)
 const TOP_FIELDS = [
   '0200 Wegen',
@@ -85,7 +94,12 @@ function validateChunkData(data: unknown): BVRecord[] {
   return data as BVRecord[]
 }
 
-export function InvesteringenBVTopFieldsSection() {
+export function InvesteringenBVTopFieldsSection({
+  viewType = 'chart',
+  metric = null,
+  municipality = null,
+  field = null,
+}: InvesteringenBVTopFieldsSectionProps = {}) {
   const [lookups, setLookups] = useState<BVLookups | null>(null)
   const [muniData, setMuniData] = useState<BVRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -95,11 +109,37 @@ export function InvesteringenBVTopFieldsSection() {
 
   const [selectedField, setSelectedField] = useState<string>('')
   const [selectedMetric, setSelectedMetric] = useState<'Totaal' | 'Per_inwoner'>('Totaal')
-  const [currentView, setCurrentView] = useState<'chart' | 'table' | 'map'>('chart')
+  const [currentView, setCurrentView] = useState<TopFieldsViewType>(viewType)
   const [geoSelection, setGeoSelection] = useState<{
     type: 'all' | 'region' | 'province' | 'arrondissement' | 'municipality'
     code?: string
   }>({ type: 'all' })
+
+  useEffect(() => {
+    setCurrentView(viewType)
+  }, [viewType])
+
+  useEffect(() => {
+    if (metric === 'per_capita') {
+      setSelectedMetric('Per_inwoner')
+    } else if (metric === 'total') {
+      setSelectedMetric('Totaal')
+    }
+  }, [metric])
+
+  useEffect(() => {
+    if (municipality) {
+      setGeoSelection({ type: 'municipality', code: municipality })
+    } else {
+      setGeoSelection({ type: 'all' })
+    }
+  }, [municipality])
+
+  useEffect(() => {
+    if (field !== null) {
+      setSelectedField(stripPrefix(field))
+    }
+  }, [field])
 
   // Load initial data and start chunk loading
   useEffect(() => {
@@ -306,7 +346,7 @@ export function InvesteringenBVTopFieldsSection() {
     }
 
     return allMunicipalities.slice(0, 20)
-  }, [dataWithoutGeoFilter, selectedMetric, geoSelection])
+  }, [dataWithoutGeoFilter, selectedMetric, geoSelection, lookups?.municipalities])
 
   // Map data: Latest rapportjaar (2026)
   const mapData = useMemo(() => {

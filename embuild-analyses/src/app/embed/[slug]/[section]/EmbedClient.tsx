@@ -11,6 +11,7 @@ import { EpcLabelverdelingEmbed } from "@/components/analyses/epc-labelverdeling
 import { VergunningenAanvragenEmbed } from "@/components/analyses/vergunningen-aanvragen/VergunningenAanvragenEmbed"
 import { GebouwenparkEmbed } from "@/components/analyses/gebouwenpark/GebouwenparkEmbed"
 import { InvesteringenEmbed } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenEmbed"
+import { InvesteringenBVTopFieldsSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVTopFieldsSection"
 import { InvesteringenBVCategorySection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVCategorySection"
 import { InvesteringenBVDifferenceSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVDifferenceSection"
 import { InvesteringenREKCategorySection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenREKCategorySection"
@@ -38,18 +39,6 @@ interface EmbedClientProps {
   section: string
 }
 
-/**
- * Props for StartersStoppersEmbed custom component
- */
-interface StartersStoppersEmbedProps {
-  section: StartersStoppersSection
-  viewType: ViewType
-  horizon: StopHorizon
-  region: RegionCode | null
-  province: ProvinceCode | null
-  sector: string | null
-}
-
 interface UrlParams {
   view: ViewType
   horizon: number | null
@@ -71,13 +60,14 @@ interface UrlParams {
   showMovingAverage: boolean
   showProvinceBoundaries: boolean
   domain: string | null
+  field: string | null
   niveau3: string | null
   rekening: string | null
 }
 
 function getParamsFromUrl(slug: string): UrlParams {
   if (typeof window === "undefined") {
-    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false, domain: null, niveau3: null, rekening: null }
+    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false, domain: null, field: null, niveau3: null, rekening: null }
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -151,6 +141,7 @@ function getParamsFromUrl(slug: string): UrlParams {
 
   // Gemeentelijke investeringen specific filters
   const domain = getParam("domain") || null
+  const field = getParam("field") || null
   const niveau3 = getParam("niveau3") || null
   const rekening = getParam("rekening") || null
 
@@ -175,6 +166,7 @@ function getParamsFromUrl(slug: string): UrlParams {
     showMovingAverage,
     showProvinceBoundaries,
     domain,
+    field,
     niveau3,
     rekening,
   }
@@ -212,6 +204,7 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
     showMovingAverage: false,
     showProvinceBoundaries: false,
     domain: null,
+    field: null,
     niveau3: null,
     rekening: null,
   })
@@ -575,9 +568,20 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
         )
       }
 
+      if (section === "investments-bv-top-fields") {
+        return (
+          <InvesteringenBVTopFieldsSection
+            viewType={urlParams.view}
+            metric={urlParams.metric}
+            municipality={urlParams.municipality}
+            field={urlParams.field}
+          />
+        )
+      }
+
       return (
         <InvesteringenEmbed
-          section={section as "investments-bv" | "investments-bv-top-fields" | "investments-rek"}
+          section={section as "investments-bv" | "investments-rek"}
           viewType={toChartOrTableViewType(urlParams.view)}
           metric={urlParams.metric}
           municipality={urlParams.municipality}
