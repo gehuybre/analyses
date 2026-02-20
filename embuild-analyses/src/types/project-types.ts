@@ -43,6 +43,13 @@ export interface CategoryMetadata {
   largest_projects: Array<{
     ac_code: string
     ac_short: string
+    ac_long?: string
+    ap_code?: string
+    ap_short?: string
+    ap_long?: string
+    bd_code?: string
+    bd_short?: string
+    bd_long?: string
     municipality: string
     nis_code: string
     total_amount: number

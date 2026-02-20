@@ -66,7 +66,7 @@ export function TopProjectsByCategory() {
 
   // Sort categories by total amount (descending), filter out empty ones, Overige at bottom
   const sortedCategories = Object.entries(metadata.categories)
-    .filter(([_, cat]) => cat.project_count > 0)
+    .filter(([, cat]) => cat.project_count > 0)
     .sort((a, b) => {
       // Always put "overige" at the bottom
       if (a[0] === 'overige') return 1
@@ -152,15 +152,15 @@ export function TopProjectsByCategory() {
                                 const fullProject: Project = {
                                   municipality: project.municipality,
                                   nis_code: project.nis_code,
-                                  bd_code: '',
-                                  bd_short: '',
-                                  bd_long: '',
-                                  ap_code: '',
-                                  ap_short: '',
-                                  ap_long: '',
+                                  bd_code: project.bd_code || '',
+                                  bd_short: project.bd_short || '',
+                                  bd_long: project.bd_long || '',
+                                  ap_code: project.ap_code || '',
+                                  ap_short: project.ap_short || '',
+                                  ap_long: project.ap_long || '',
                                   ac_code: project.ac_code,
                                   ac_short: project.ac_short,
-                                  ac_long: '',
+                                  ac_long: project.ac_long || project.ap_long || project.bd_long || project.ap_short || project.bd_short || project.ac_short,
                                   total_amount: project.total_amount,
                                   amount_per_capita: 0,
                                   yearly_amounts: project.yearly_amounts as Project['yearly_amounts'],

@@ -200,7 +200,8 @@ def summarize_projects_by_category(projects, top_n=5):
             - label
             - project_count
             - total_amount
-            - largest_projects: list of project summaries (sorted desc by amount)
+            - largest_projects: list of project summaries (sorted desc by amount),
+              including action/plan/goal context fields used in the detail modal
     """
     import ast
     def _normalize_categories(raw):
@@ -253,6 +254,13 @@ def summarize_projects_by_category(projects, top_n=5):
             largest_projects.append({
                 'ac_code': p.get('ac_code'),
                 'ac_short': p.get('ac_short'),
+                'ac_long': p.get('ac_long', ''),
+                'ap_code': p.get('ap_code', ''),
+                'ap_short': p.get('ap_short', ''),
+                'ap_long': p.get('ap_long', ''),
+                'bd_code': p.get('bd_code', ''),
+                'bd_short': p.get('bd_short', ''),
+                'bd_long': p.get('bd_long', ''),
                 'municipality': p.get('municipality'),
                 'nis_code': p.get('nis_code'),
                 'total_amount': round(p.get('total_amount', 0), 2),
