@@ -89,6 +89,11 @@ type Perspective = "bv" | "rek"
 interface InvesteringenEmbedProps {
   section: "investments-bv" | "investments-bv-top-fields" | "investments-rek"
   viewType?: ViewType
+  metric?: string | null
+  municipality?: string | null
+  domain?: string | null
+  niveau3?: string | null
+  rekening?: string | null
 }
 
 // Runtime validation helpers
@@ -168,7 +173,15 @@ function validateREKChunkData(data: unknown): REKRecord[] {
   return data as REKRecord[]
 }
 
-export function InvesteringenEmbed({ section, viewType = "chart" }: InvesteringenEmbedProps) {
+export function InvesteringenEmbed({
+  section,
+  viewType = "chart",
+  metric = null,
+  municipality = null,
+  domain = null,
+  niveau3 = null,
+  rekening = null,
+}: InvesteringenEmbedProps) {
   const perspective: Perspective = (section === "investments-bv" || section === "investments-bv-top-fields") ? "bv" : "rek"
 
   const [bvLookups, setBVLookups] = useState<BVLookups | null>(null)
@@ -185,8 +198,6 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
 
   // BV filters
   const [selectedDomain, setSelectedDomain] = useState<string>('')
-  const [selectedSubdomein, setSelectedSubdomein] = useState<string>('')
-  const [selectedBeleidsveld, setSelectedBeleidsveld] = useState<string>('')
 
   // REK filters
   const [selectedHoofdrekening, setSelectedHoofdrekening] = useState<string>('')
@@ -201,6 +212,45 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
 
   // Track if data was already loaded to prevent double loading
   const isDataLoadedRef = useRef(false)
+
+  useEffect(() => {
+    setCurrentView(viewType)
+  }, [viewType])
+
+  // Apply URL-driven initial filter state from EmbedClient params
+  useEffect(() => {
+    if (metric === 'per_capita') {
+      setSelectedMetric('Per_inwoner')
+    } else if (metric === 'total') {
+      setSelectedMetric('Totaal')
+    }
+  }, [metric])
+
+  useEffect(() => {
+    if (municipality) {
+      setGeoSelection({ type: 'municipality', code: municipality })
+    } else {
+      setGeoSelection({ type: 'all' })
+    }
+  }, [municipality])
+
+  useEffect(() => {
+    if (domain !== null) {
+      setSelectedDomain(domain)
+    }
+  }, [domain])
+
+  useEffect(() => {
+    if (niveau3 !== null) {
+      setSelectedHoofdrekening(niveau3)
+    }
+  }, [niveau3])
+
+  useEffect(() => {
+    if (rekening !== null) {
+      setSelectedRubriek(rekening)
+    }
+  }, [rekening])
 
   // Load initial data and start chunk loading
   useEffect(() => {
@@ -248,9 +298,9 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
           setTotalChunks(meta.bv_chunks)
           setIsLoading(false)
 
-          // Set default domain
+          // Set a domain default only when no explicit value is active
           if (lookupsData.domains.length > 0) {
-            setSelectedDomain(stripPrefix(lookupsData.domains[0].BV_domein))
+            setSelectedDomain((prev) => prev || stripPrefix(lookupsData.domains[0].BV_domein))
           }
 
           // Load chunks in parallel
@@ -310,13 +360,13 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
           setTotalChunks(meta.rek_chunks)
           setIsLoading(false)
 
-          // Set default hoofdrekening
+          // Set a hoofdrekening default only when no explicit value is active
           const hoofdrekeningen = lookupsData.hoofdrekeningen || (lookupsData as any).niveau3s
           if (hoofdrekeningen && hoofdrekeningen.length > 0) {
             const first = hoofdrekeningen[0]
             const value = first.Economische_rekening_hoofdrekening || first.Niveau_3
             if (value) {
-              setSelectedHoofdrekening(stripPrefix(value))
+              setSelectedHoofdrekening((prev) => prev || stripPrefix(value))
             }
           }
 
@@ -366,23 +416,14 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
     return bvLookups.domains.map(d => stripPrefix(d.BV_domein)).sort()
   }, [bvLookups])
 
-  const bvSubdomeinOptions = useMemo(() => {
-    if (!bvLookups) return []
-    let options = bvLookups.subdomeins
-    if (selectedDomain) {
-      options = options.filter(s => stripPrefix(s.BV_domein) === selectedDomain)
-    }
-    return options.map(s => stripPrefix(s.BV_subdomein)).sort()
+  const selectedDomainSubdomains = useMemo(() => {
+    if (!bvLookups || !selectedDomain) return []
+    const labels = bvLookups.subdomeins
+      .filter((s) => stripPrefix(s.BV_domein) === selectedDomain)
+      .map((s) => stripPrefix(s.BV_subdomein))
+      .sort()
+    return Array.from(new Set(labels))
   }, [bvLookups, selectedDomain])
-
-  const bvBeleidsveldOptions = useMemo(() => {
-    if (!bvLookups) return []
-    let options = bvLookups.beleidsvelds
-    if (selectedSubdomein) {
-      options = options.filter(b => stripPrefix(b.BV_subdomein) === selectedSubdomein)
-    }
-    return options.map(b => stripPrefix(b.Beleidsveld)).sort()
-  }, [bvLookups, selectedSubdomein])
 
   // REK filtering logic - updated to handle keys correctly
   const rekHoofdrekenOptions = useMemo(() => {
@@ -410,15 +451,9 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
     if (selectedDomain) {
       data = data.filter(d => stripPrefix(d.BV_domein) === selectedDomain)
     }
-    if (selectedSubdomein) {
-      data = data.filter(d => stripPrefix(d.BV_subdomein) === selectedSubdomein)
-    }
-    if (selectedBeleidsveld) {
-      data = data.filter(d => stripPrefix(d.Beleidsveld) === selectedBeleidsveld)
-    }
 
     return data
-  }, [bvMuniData, selectedDomain, selectedSubdomein, selectedBeleidsveld])
+  }, [bvMuniData, selectedDomain])
 
   // BV: Apply geo filter on top of category-filtered data
   const filteredBVData = useMemo(() => {
@@ -643,33 +678,10 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
                 <>
                   <HierarchicalFilter
                     value={selectedDomain}
-                    onChange={(v) => {
-                      setSelectedDomain(v)
-                      setSelectedSubdomein('')
-                      setSelectedBeleidsveld('')
-                    }}
+                    onChange={setSelectedDomain}
                     options={bvDomainOptions}
                     placeholder="Selecteer domein"
                   />
-                  {selectedDomain && (
-                    <HierarchicalFilter
-                      value={selectedSubdomein}
-                      onChange={(v) => {
-                        setSelectedSubdomein(v)
-                        setSelectedBeleidsveld('')
-                      }}
-                      options={bvSubdomeinOptions}
-                      placeholder="Selecteer subdomein"
-                    />
-                  )}
-                  {selectedSubdomein && (
-                    <HierarchicalFilter
-                      value={selectedBeleidsveld}
-                      onChange={setSelectedBeleidsveld}
-                      options={bvBeleidsveldOptions}
-                      placeholder="Selecteer beleidsveld"
-                    />
-                  )}
                 </>
               )}
 
@@ -695,6 +707,14 @@ export function InvesteringenEmbed({ section, viewType = "chart" }: Investeringe
                 </>
               )}
             </div>
+
+            {perspective === "bv" && selectedDomain && selectedDomainSubdomains.length > 0 && (
+              <div className="bg-muted/50 p-3 rounded border text-sm">
+                <p>
+                  <span className="font-semibold">Dit domein bevat:</span> {selectedDomainSubdomains.join(", ")}
+                </p>
+              </div>
+            )}
 
             <Tabs value={currentView} onValueChange={(v) => setCurrentView(v as ViewType)} className="w-full">
               <TabsList>

@@ -113,6 +113,7 @@ export function InvesteringenREKSection() {
   const [selectedNiveau3, setSelectedNiveau3] = useState<string>('')
   const [selectedAlgRekening, setSelectedAlgRekening] = useState<string>('')
   const [selectedMetric, setSelectedMetric] = useState<'Totaal' | 'Per_inwoner'>('Totaal')
+  const [currentView, setCurrentView] = useState<'chart' | 'table' | 'map'>('chart')
   const [geoSelection, setGeoSelection] = useState<{
     type: 'all' | 'region' | 'province' | 'arrondissement' | 'municipality'
     code?: string
@@ -473,7 +474,13 @@ export function InvesteringenREKSection() {
                 title="Investeringen per economische rekening"
                 slug="gemeentelijke-investeringen"
                 sectionId="investments-rek"
-                viewType="table"
+                viewType={currentView}
+                embedParams={{
+                  metric: selectedMetric === 'Per_inwoner' ? 'per_capita' : 'total',
+                  municipality: geoSelection.type === 'municipality' ? geoSelection.code : null,
+                  niveau3: selectedNiveau3 || null,
+                  rekening: selectedAlgRekening || null,
+                }}
                 data={tableData.map(d => ({ label: d.municipality, value: d.total }))}
               />
             </div>
@@ -529,7 +536,7 @@ export function InvesteringenREKSection() {
               )}
             </div>
 
-            <Tabs defaultValue="chart" className="w-full">
+            <Tabs value={currentView} onValueChange={(v) => setCurrentView(v as 'chart' | 'table' | 'map')} className="w-full">
               <TabsList>
                 <TabsTrigger value="chart">Grafiek</TabsTrigger>
                 <TabsTrigger value="table">Tabel</TabsTrigger>

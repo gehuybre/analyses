@@ -130,6 +130,7 @@ export function ExportButtons({
   // Get current filter state from store for automatic embed URL generation
   const toQueryString = useEmbedFilters((state) => state.toQueryString)
   const storeCurrentView = useEmbedFilters((state) => state.currentView)
+  const storeAnalysisSlug = useEmbedFilters((state) => state.analysisSlug)
 
   const getEmbedCode = useCallback((): string => {
     // Type guard: validate that this section is embeddable
@@ -155,13 +156,15 @@ export function ExportButtons({
     const encodedSlug = encodeURIComponent(slug)
     const encodedSectionId = encodeURIComponent(sectionId)
 
-    // Get current filter state as query string (automatically includes all active filters)
-    const params = new URLSearchParams(toQueryString())
+    // Only use store params when the store context matches this analysis slug.
+    // Otherwise we risk leaking default/stale params from another analysis.
+    const canUseStoreState = storeAnalysisSlug === slug
+    const params = new URLSearchParams(canUseStoreState ? toQueryString() : "")
 
     // Ensure embed URL always carries the current view (chart/table/map)
     // Use store's currentView instead of prop to ensure it reflects what the user actually selected
     const viewKey = `${slug}.view`
-    const effectiveView = storeCurrentView || viewType
+    const effectiveView = canUseStoreState ? (storeCurrentView || viewType) : viewType
     params.set(viewKey, effectiveView)
     params.delete("view")
 
@@ -223,7 +226,7 @@ export function ExportButtons({
   });
 })();
 </script>`
-  }, [slug, sectionId, title, toQueryString, storeCurrentView, embedParams, viewType])
+  }, [slug, sectionId, title, toQueryString, storeCurrentView, storeAnalysisSlug, embedParams, viewType])
 
   const copyEmbedCode = useCallback(async () => {
     const code = getEmbedCode()

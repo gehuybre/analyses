@@ -95,6 +95,7 @@ export function InvesteringenBVTopFieldsSection() {
 
   const [selectedField, setSelectedField] = useState<string>('')
   const [selectedMetric, setSelectedMetric] = useState<'Totaal' | 'Per_inwoner'>('Totaal')
+  const [currentView, setCurrentView] = useState<'chart' | 'table' | 'map'>('chart')
   const [geoSelection, setGeoSelection] = useState<{
     type: 'all' | 'region' | 'province' | 'arrondissement' | 'municipality'
     code?: string
@@ -387,7 +388,12 @@ export function InvesteringenBVTopFieldsSection() {
                 title="Top beleidsvelden"
                 slug="gemeentelijke-investeringen"
                 sectionId="investments-bv-top-fields"
-                viewType="table"
+                viewType={currentView}
+                embedParams={{
+                  metric: selectedMetric === 'Per_inwoner' ? 'per_capita' : 'total',
+                  municipality: geoSelection.type === 'municipality' ? geoSelection.code : null,
+                  field: selectedField || null,
+                }}
                 data={tableData.map(d => ({ label: d.municipality, value: d.total }))}
               />
             </div>
@@ -430,7 +436,7 @@ export function InvesteringenBVTopFieldsSection() {
               />
             </div>
 
-            <Tabs defaultValue="chart" className="w-full">
+            <Tabs value={currentView} onValueChange={(v) => setCurrentView(v as 'chart' | 'table' | 'map')} className="w-full">
               <TabsList>
                 <TabsTrigger value="chart">Grafiek</TabsTrigger>
                 <TabsTrigger value="table">Tabel</TabsTrigger>

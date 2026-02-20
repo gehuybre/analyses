@@ -70,11 +70,14 @@ interface UrlParams {
   chartType: string | null
   showMovingAverage: boolean
   showProvinceBoundaries: boolean
+  domain: string | null
+  niveau3: string | null
+  rekening: string | null
 }
 
 function getParamsFromUrl(slug: string): UrlParams {
   if (typeof window === "undefined") {
-    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false }
+    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false, domain: null, niveau3: null, rekening: null }
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -146,6 +149,11 @@ function getParamsFromUrl(slug: string): UrlParams {
   const boundariesStr = getParam("boundaries")
   const showProvinceBoundaries = boundariesStr === "1" || boundariesStr === "true"
 
+  // Gemeentelijke investeringen specific filters
+  const domain = getParam("domain") || null
+  const niveau3 = getParam("niveau3") || null
+  const rekening = getParam("rekening") || null
+
   return {
     view: viewType,
     horizon: Number.isFinite(horizon as number) ? horizon : null,
@@ -166,6 +174,9 @@ function getParamsFromUrl(slug: string): UrlParams {
     chartType,
     showMovingAverage,
     showProvinceBoundaries,
+    domain,
+    niveau3,
+    rekening,
   }
 }
 
@@ -200,6 +211,9 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
     chartType: null,
     showMovingAverage: false,
     showProvinceBoundaries: false,
+    domain: null,
+    niveau3: null,
+    rekening: null,
   })
 
   // State for dynamically loaded data
@@ -563,8 +577,13 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
 
       return (
         <InvesteringenEmbed
-          section={section as "investments-bv" | "investments-rek"}
+          section={section as "investments-bv" | "investments-bv-top-fields" | "investments-rek"}
           viewType={toChartOrTableViewType(urlParams.view)}
+          metric={urlParams.metric}
+          municipality={urlParams.municipality}
+          domain={urlParams.domain}
+          niveau3={urlParams.niveau3}
+          rekening={urlParams.rekening}
         />
       )
     }
