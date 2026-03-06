@@ -19,10 +19,10 @@ export function TopProjectsByCategory() {
   useEffect(() => {
     const loadMetadata = async () => {
       try {
-        const cacheBuster = new Date().getTime()
-        const response = await fetch(getDataPath(`/data/bouwprojecten-gemeenten/projects_metadata.json?t=${cacheBuster}`), {
-          cache: 'no-store'
-        })
+        const response = await fetch(
+          getDataPath("/data/bouwprojecten-gemeenten/projects_metadata.json?v=municipality-index-v1"),
+          { cache: "no-cache" }
+        )
         if (!response.ok) throw new Error("Failed to load metadata")
         const data = await response.json()
         setMetadata(data)

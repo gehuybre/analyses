@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Project, ProjectMetadata, ProjectFilters, SortOption } from "@/types/project-types"
 import { ProjectFiltersComponent } from "./ProjectFilters"
 import { ProjectList } from "./ProjectList"
@@ -18,122 +17,243 @@ import { getBasePath, getDataPath } from "@/lib/path-utils"
 export function ProjectBrowser() {
   const [projects, setProjects] = useState<Project[]>([])
   const [metadata, setMetadata] = useState<ProjectMetadata | null>(null)
-  const [loadedChunks, setLoadedChunks] = useState<Set<number>>(new Set())
-  const [failedChunks, setFailedChunks] = useState<Set<number>>(new Set())
-  // Track in-flight chunk loads to avoid concurrent fetches for the same chunk
-  const loadingChunksRef = useRef<Set<number>>(new Set())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [loadingMetadata, setLoadingMetadata] = useState(true)
+  const [loadingProjects, setLoadingProjects] = useState(false)
+  const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [projectsError, setProjectsError] = useState<string | null>(null)
 
   const [filters, setFilters] = useState<ProjectFilters>({})
   const [sortOption, setSortOption] = useState<SortOption>("amount-desc")
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [copied, setCopied] = useState(false)
+  const [municipalityReloadCounter, setMunicipalityReloadCounter] = useState(0)
 
-  // Load metadata and first chunk on mount
-  useEffect(() => {
-    const initializeData = async () => {
-      await loadMetadata()
-      const success = await loadChunk(0)
-      if (!success) {
-        setError("Kon eerste data chunk niet laden. Probeer de pagina te verversen.")
-      }
-      setLoading(false)
-    }
-    initializeData()
-  }, [])
+  const municipalityCacheRef = useRef<Map<string, Project[]>>(new Map())
+  const metadataVersion = "municipality-index-v1"
 
-  const loadMetadata = async () => {
+  const municipalityIndex = useMemo(() => {
+    const index = new Map<string, string>()
+    metadata?.municipality_index?.forEach((entry) => {
+      index.set(entry.nis_code, entry.file)
+    })
+    return index
+  }, [metadata])
+
+  const loadMetadata = useCallback(async () => {
+    setLoadingMetadata(true)
     try {
-      // Add cache buster to force fresh data (use current timestamp)
-      const cacheBuster = new Date().getTime()
-      const response = await fetch(getDataPath(`/data/bouwprojecten-gemeenten/projects_metadata.json?t=${cacheBuster}`), {
-        cache: 'no-store'
-      })
-      if (!response.ok) throw new Error("Failed to load metadata")
-      const data = await response.json()
-      setMetadata(data)
-    } catch (err) {
-      console.error("Error loading metadata:", err)
-      setError("Kon metadata niet laden")
-    }
-  }
+      const remoteUrl = getDataPath(`/data/bouwprojecten-gemeenten/projects_metadata.json?v=${metadataVersion}`)
+      const localUrls = Array.from(
+        new Set([
+          `${getBasePath()}/data/bouwprojecten-gemeenten/projects_metadata.json?v=${metadataVersion}`,
+          `/data/bouwprojecten-gemeenten/projects_metadata.json?v=${metadataVersion}`,
+        ])
+      )
 
-  const loadChunk = async (chunkIndex: number, retries = 3): Promise<boolean> => {
-    if (loadedChunks.has(chunkIndex)) return true
-    if (failedChunks.has(chunkIndex)) return false
-    if (loadingChunksRef.current.has(chunkIndex)) return true
+      let data: ProjectMetadata | null = null
 
-    // mark as in-flight
-    loadingChunksRef.current.add(chunkIndex)
+      // Primary source (can be external data host)
+      const remoteResponse = await fetch(remoteUrl, { cache: "no-cache" })
+      if (remoteResponse.ok) {
+        data = await remoteResponse.json()
+      }
 
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
-
-        const cacheBuster = new Date().getTime()
-        const response = await fetch(
-          getDataPath(`/data/bouwprojecten-gemeenten/projects_2026_chunk_${chunkIndex}.json?t=${cacheBuster}`),
-          { signal: controller.signal, cache: 'no-store' }
-        )
-        clearTimeout(timeoutId)
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.json()
-
-        // Append new projects and mark chunk as loaded
-        setProjects(prev => {
-          // Prevent duplicates by appending only projects that are not already present
-          // Use a short-circuit key map based on nis_code+ac_code+ac_short
-          const existingKeys = new Set(prev.map(p => `${p.nis_code}||${p.ac_code}||${p.ac_short}`))
-          const toAdd = data.filter((p: Project) => !existingKeys.has(`${p.nis_code}||${p.ac_code}||${p.ac_short}`))
-          return [...prev, ...toAdd]
-        })
-        setLoadedChunks(prev => new Set([...prev, chunkIndex]))
-        loadingChunksRef.current.delete(chunkIndex)
-        return true
-      } catch (err) {
-        console.error(`Error loading chunk ${chunkIndex} (attempt ${attempt + 1}/${retries}):`, err)
-
-        if (attempt < retries - 1) {
-          // Exponential backoff: 1s, 2s, 4s
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
-        } else {
-          // Mark as failed after all retries
-          setFailedChunks(prev => new Set([...prev, chunkIndex]))
-          loadingChunksRef.current.delete(chunkIndex)
-          console.error(`Failed to load chunk ${chunkIndex} after ${retries} attempts`)
-          return false
+      // Fallback to local bundled metadata when external metadata is stale/missing municipality index
+      const hasIndex = Array.isArray(data?.municipality_index) && data.municipality_index.length > 0
+      if (!hasIndex) {
+        for (const localUrl of localUrls) {
+          const localResponse = await fetch(localUrl, { cache: "no-cache" })
+          if (!localResponse.ok) {
+            continue
+          }
+          const localData = await localResponse.json()
+          if (Array.isArray(localData?.municipality_index) && localData.municipality_index.length > 0) {
+            data = localData
+            break
+          }
         }
       }
-    }
-    return false
-  }
 
-  // Load all remaining chunks in parallel
-  const loadAllChunks = async () => {
+      // Last-resort fallback: merge standalone municipality index file if metadata lacks it
+      const hasFinalIndex = Array.isArray(data?.municipality_index) && data.municipality_index.length > 0
+      if (!hasFinalIndex) {
+        const indexUrls = Array.from(
+          new Set([
+            `${getBasePath()}/data/bouwprojecten-gemeenten/municipality_index.json?v=${metadataVersion}`,
+            `/data/bouwprojecten-gemeenten/municipality_index.json?v=${metadataVersion}`,
+          ])
+        )
+
+        for (const indexUrl of indexUrls) {
+          const indexResponse = await fetch(indexUrl, { cache: "no-cache" })
+          if (!indexResponse.ok || !data) {
+            continue
+          }
+
+          const indexData = await indexResponse.json()
+          if (Array.isArray(indexData) && indexData.length > 0) {
+            data = {
+              ...data,
+              municipality_index: indexData
+            }
+            break
+          }
+        }
+      }
+
+      if (!data) throw new Error("Failed to load metadata")
+      municipalityCacheRef.current.clear()
+      setMetadata(data)
+      setMetadataError(null)
+    } catch (err) {
+      console.error("Error loading metadata:", err)
+      setMetadataError("Kon metadata niet laden")
+    } finally {
+      setLoadingMetadata(false)
+    }
+  }, [])
+
+  const fetchMunicipalityProjects = useCallback(
+    async (nisCode: string, retries = 3): Promise<Project[] | null> => {
+      const cached = municipalityCacheRef.current.get(nisCode)
+      if (cached) {
+        return cached
+      }
+
+      const metadataFile = municipalityIndex.get(nisCode)
+      const relativeFile = (metadataFile ?? `municipality/${nisCode}.json`).replace(/^\/+/, "")
+      const remoteUrl = getDataPath(`/data/bouwprojecten-gemeenten/${relativeFile}`)
+      const candidateUrls = Array.from(
+        new Set([
+          remoteUrl,
+          `${getBasePath()}/data/bouwprojecten-gemeenten/${relativeFile}`,
+          `/data/bouwprojecten-gemeenten/${relativeFile}`,
+        ])
+      )
+
+      for (let attempt = 0; attempt < retries; attempt++) {
+        for (const url of candidateUrls) {
+          let timeoutId: ReturnType<typeof setTimeout> | undefined
+          try {
+            const controller = new AbortController()
+            timeoutId = setTimeout(() => controller.abort(), 30000)
+
+            const response = await fetch(url, { signal: controller.signal })
+            if (!response.ok) {
+              continue
+            }
+
+            const data = await response.json()
+            if (!Array.isArray(data)) {
+              continue
+            }
+
+            const municipalityProjects = data as Project[]
+            municipalityCacheRef.current.set(nisCode, municipalityProjects)
+            return municipalityProjects
+          } catch (err) {
+            console.error(`Error loading municipality ${nisCode} from ${url}:`, err)
+          } finally {
+            if (timeoutId) clearTimeout(timeoutId)
+          }
+        }
+
+        if (attempt < retries - 1) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+        }
+      }
+
+      // Legacy fallback: external host still serves old chunk files without municipality split
+      const hasMunicipalityIndex = Array.isArray(metadata?.municipality_index) && metadata.municipality_index.length > 0
+      const legacyChunkCount = hasMunicipalityIndex ? 0 : Number(metadata?.chunks ?? 0)
+      if (legacyChunkCount > 0 && legacyChunkCount <= 20) {
+        try {
+          const chunkResults = await Promise.all(
+            Array.from({ length: legacyChunkCount }, (_, i) =>
+              fetch(getDataPath(`/data/bouwprojecten-gemeenten/projects_2026_chunk_${i}.json`))
+                .then(async (res) => (res.ok ? res.json() : []))
+                .catch(() => [])
+            )
+          )
+
+          const municipalityProjects = chunkResults
+            .flatMap((chunk) => (Array.isArray(chunk) ? chunk : []))
+            .filter((project): project is Project =>
+              Boolean(project) &&
+              typeof project === "object" &&
+              "nis_code" in project &&
+              String((project as Project).nis_code) === nisCode
+            )
+            .sort((a, b) => b.total_amount - a.total_amount)
+
+          if (municipalityProjects.length > 0) {
+            municipalityCacheRef.current.set(nisCode, municipalityProjects)
+            return municipalityProjects
+          }
+        } catch (err) {
+          console.error(`Legacy chunk fallback failed for municipality ${nisCode}:`, err)
+        }
+      }
+
+      return null
+    },
+    [municipalityIndex, metadata]
+  )
+
+  useEffect(() => {
+    void loadMetadata()
+  }, [loadMetadata])
+
+  useEffect(() => {
     if (!metadata) return
 
-    setLoading(true)
-    // Load all chunks in parallel
-    const chunkPromises = Array.from({ length: metadata.chunks }, (_, i) => loadChunk(i))
-    const results = await Promise.all(chunkPromises)
-
-    // Check if any chunks failed
-    const failedCount = results.filter(success => !success).length
-    if (failedCount > 0) {
-      setError(`${failedCount} chunk(s) konden niet worden geladen. Sommige projecten ontbreken mogelijk.`)
+    const selectedNisCode = filters.nis_code
+    if (!selectedNisCode) {
+      setProjects([])
+      setProjectsError(null)
+      setLoadingProjects(false)
+      return
     }
 
-    setLoading(false)
-  }
+    let cancelled = false
 
-  // Filter and sort projects
+    const loadMunicipality = async () => {
+      setLoadingProjects(true)
+      setProjectsError(null)
+      setProjects([])
+
+      const municipalityProjects = await fetchMunicipalityProjects(selectedNisCode)
+      if (cancelled) return
+
+      if (!municipalityProjects) {
+        setProjectsError("Kon projecten voor deze gemeente niet laden. Probeer opnieuw.")
+        setLoadingProjects(false)
+        return
+      }
+
+      setProjects(municipalityProjects)
+      setLoadingProjects(false)
+    }
+
+    void loadMunicipality()
+
+    return () => {
+      cancelled = true
+    }
+  }, [filters.nis_code, metadata, fetchMunicipalityProjects, municipalityReloadCounter])
+
+  const selectedMunicipalityMeta = useMemo(() => {
+    if (!filters.nis_code || !metadata?.municipality_index) return null
+    return metadata.municipality_index.find(entry => entry.nis_code === filters.nis_code) ?? null
+  }, [filters.nis_code, metadata])
+
+  const selectedMunicipalityName = selectedMunicipalityMeta?.municipality ?? projects[0]?.municipality ?? null
+
+  // Filter and sort municipality projects
   const filteredAndSortedProjects = useMemo(() => {
     let filtered = projects
 
-    // Apply NIS code filter
+    // Apply NIS code filter (defensive; dataset is already municipality-specific)
     if (filters.nis_code) {
       filtered = filtered.filter(p => p.nis_code === filters.nis_code)
     }
@@ -178,10 +298,10 @@ export function ProjectBrowser() {
     return filteredAndSortedProjects.reduce((sum, p) => sum + p.total_amount, 0)
   }, [filteredAndSortedProjects])
 
-  const hasActiveFilters =
-    filters.nis_code ||
-    (filters.categories && filters.categories.length > 0) ||
-    filters.searchQuery
+  const hasMunicipalitySelected = Boolean(filters.nis_code)
+  const hasSecondaryFilters = Boolean(
+    (filters.categories && filters.categories.length > 0) || filters.searchQuery
+  )
 
   const getEmbedCode = (): string => {
     const baseUrl = typeof window !== "undefined"
@@ -229,7 +349,7 @@ export function ProjectBrowser() {
       await navigator.clipboard.writeText(code)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
+    } catch {
       // Fallback for older browsers
       const textArea = document.createElement("textarea")
       textArea.value = code
@@ -248,7 +368,7 @@ export function ProjectBrowser() {
       "NIS Code",
       "Project Code",
       "Project Naam",
-      "Categorieën",
+      "Categorieen",
       "Totaal Bedrag",
       "2026",
       "2027",
@@ -291,20 +411,23 @@ export function ProjectBrowser() {
     document.body.removeChild(link)
   }
 
-  // Show error only if no data loaded at all
-  const showCriticalError = error && projects.length === 0
+  if (loadingMetadata && !metadata) {
+    return (
+      <div className="rounded-lg border bg-card p-6">
+        <p className="text-muted-foreground">Metadata laden...</p>
+      </div>
+    )
+  }
 
-  if (showCriticalError) {
+  if (metadataError && !metadata) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-        <p className="text-red-800">Fout bij het laden van projecten: {error}</p>
+        <p className="text-red-800">Fout bij het laden van metadata: {metadataError}</p>
         <Button
           variant="outline"
           className="mt-4"
           onClick={() => {
-            setError(null)
-            setFailedChunks(new Set())
-            loadChunk(0)
+            void loadMetadata()
           }}
         >
           Opnieuw proberen
@@ -323,10 +446,18 @@ export function ProjectBrowser() {
         </p>
       </div>
 
-      {/* Partial failure warning */}
-      {error && projects.length > 0 && (
+      {/* Municipality loading warning */}
+      {projectsError && hasMunicipalitySelected && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-          <p className="text-yellow-800 text-sm">{error}</p>
+          <p className="text-yellow-800 text-sm">{projectsError}</p>
+          <Button
+            variant="link"
+            size="sm"
+            className="px-0 h-auto mt-1"
+            onClick={() => setMunicipalityReloadCounter((prev) => prev + 1)}
+          >
+            Probeer opnieuw
+          </Button>
         </div>
       )}
 
@@ -340,48 +471,33 @@ export function ProjectBrowser() {
         setSortOption={setSortOption}
       />
 
-      {/* Show explanation if no filters active */}
-      {!hasActiveFilters && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-8 text-center">
-          <p className="text-blue-900 font-medium mb-2">Selecteer een filter om projecten te tonen</p>
-          <p className="text-blue-800 text-sm">
-            Kies een gemeente, categorie of voer een zoekterm in.
-          </p>
-        </div>
-      )}
-
-      {/* Summary Stats - only show when filters are active */}
-      {hasActiveFilters && (
+      {hasMunicipalitySelected && (
         <>
           <div className="rounded-lg border bg-card p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Gevonden projecten</p>
-                <p className="text-2xl font-bold">
-                  {filteredAndSortedProjects.length.toLocaleString("nl-BE")}
+                <p className="text-sm text-muted-foreground">
+                  Gevonden projecten{selectedMunicipalityName ? ` in ${selectedMunicipalityName}` : ""}
                 </p>
-                {metadata && loadedChunks.size < metadata.chunks && (
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={loadAllChunks}
-                    disabled={loading}
-                    className="px-0 h-auto"
-                  >
-                    {loading ? "Laden..." : `Laad alle projecten (${projects.length}/${metadata.total_projects})`}
-                  </Button>
+                <p className="text-2xl font-bold">
+                  {loadingProjects ? "..." : filteredAndSortedProjects.length.toLocaleString("nl-BE")}
+                </p>
+                {selectedMunicipalityMeta && hasSecondaryFilters && !loadingProjects && (
+                  <p className="text-xs text-muted-foreground">
+                    {filteredAndSortedProjects.length} van {selectedMunicipalityMeta.project_count.toLocaleString("nl-BE")} projecten in deze gemeente
+                  </p>
                 )}
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Totaal bedrag</p>
                 <p className="text-2xl font-bold">
-                  €{(totalFilteredAmount / 1_000_000).toFixed(1)}M
+                  {loadingProjects ? "..." : `€${(totalFilteredAmount / 1_000_000).toFixed(1)}M`}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleExportCSV}
-                  disabled={filteredAndSortedProjects.length === 0}
+                  disabled={loadingProjects || filteredAndSortedProjects.length === 0}
                   variant="outline"
                   size="sm"
                 >
@@ -434,7 +550,7 @@ export function ProjectBrowser() {
           <ProjectList
             projects={filteredAndSortedProjects}
             onProjectClick={setSelectedProject}
-            loading={loading}
+            loading={loadingProjects}
           />
         </>
       )}

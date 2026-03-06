@@ -12,18 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { X, Search, Check, ChevronsUpDown } from "lucide-react"
-import { useMemo, useState } from "react"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { X } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 
 interface ProjectFiltersComponentProps {
   filters: ProjectFilters
@@ -42,34 +32,68 @@ export function ProjectFiltersComponent({
   sortOption,
   setSortOption,
 }: ProjectFiltersComponentProps) {
-  const [searchInput, setSearchInput] = useState("")
-  const [muniOpen, setMuniOpen] = useState(false)
+  const [municipalityInput, setMunicipalityInput] = useState("")
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false)
 
-  // Get unique municipalities with NIS codes from loaded projects
+  // Prefer metadata index (all municipalities), fallback to loaded projects
   const municipalities = useMemo(() => {
+    if (metadata?.municipality_index && metadata.municipality_index.length > 0) {
+      return metadata.municipality_index
+        .map((entry) => ({ nis_code: entry.nis_code, name: entry.municipality }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+
     const unique = Array.from(new Set(
       projects.map(p => JSON.stringify({ nis_code: p.nis_code, name: p.municipality }))
     )).map(str => JSON.parse(str) as { nis_code: string; name: string })
     return unique.sort((a, b) => a.name.localeCompare(b.name))
-  }, [projects])
+  }, [metadata, projects])
+
+  const selectedMunicipalityName = useMemo(() => {
+    if (!filters.nis_code) return ""
+    return municipalities.find(m => m.nis_code === filters.nis_code)?.name ?? ""
+  }, [filters.nis_code, municipalities])
+
+  useEffect(() => {
+    setMunicipalityInput(selectedMunicipalityName)
+  }, [selectedMunicipalityName])
+
+  const filteredMunicipalities = useMemo(() => {
+    const query = municipalityInput.trim().toLowerCase()
+    const scored = municipalities
+      .map((muni) => {
+        const name = muni.name.toLowerCase()
+        let score = 3
+        if (!query) score = 0
+        else if (name === query) score = 0
+        else if (name.startsWith(query)) score = 1
+        else if (name.includes(query)) score = 2
+
+        return { ...muni, score }
+      })
+      .filter((entry) => entry.score < 3)
+      .sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score
+        return a.name.localeCompare(b.name)
+      })
+
+    return scored
+  }, [municipalities, municipalityInput])
 
   // Calculate project counts per category for the selected municipality
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {}
 
-    // Initialize with 0 for all categories from metadata
     if (metadata) {
       Object.keys(metadata.categories).forEach(id => {
         counts[id] = 0
       })
     }
 
-    // Filter projects by NIS code if one is selected
     const relevantProjects = filters.nis_code
       ? projects.filter(p => p.nis_code === filters.nis_code)
-      : projects
+      : []
 
-    // Count categories in relevant projects
     relevantProjects.forEach(project => {
       project.categories.forEach(catId => {
         if (counts[catId] !== undefined) {
@@ -83,11 +107,75 @@ export function ProjectFiltersComponent({
 
   const handleMunicipalityChange = (value: string) => {
     if (value === "all") {
-      const { nis_code, ...rest } = filters
-      setFilters(rest)
-    } else {
-      setFilters({ ...filters, nis_code: value })
+      const nextFilters = { ...filters }
+      delete nextFilters.nis_code
+      delete nextFilters.categories
+      delete nextFilters.searchQuery
+      setFilters(nextFilters)
+      setMunicipalityInput("")
+      return
     }
+
+    const selected = municipalities.find(m => m.nis_code === value)
+    const nextFilters = { ...filters, nis_code: value }
+    delete nextFilters.searchQuery
+    setFilters(nextFilters)
+    setMunicipalityInput(selected?.name ?? "")
+    setIsAutocompleteOpen(false)
+  }
+
+  const handleMunicipalityInputChange = (rawValue: string) => {
+    setMunicipalityInput(rawValue)
+    setIsAutocompleteOpen(true)
+
+    // If user edits the selected municipality name, clear municipality filter.
+    if (filters.nis_code && rawValue.trim().toLowerCase() !== selectedMunicipalityName.toLowerCase()) {
+      const nextFilters = { ...filters }
+      delete nextFilters.nis_code
+      delete nextFilters.categories
+      delete nextFilters.searchQuery
+      setFilters(nextFilters)
+    }
+
+    const value = rawValue.trim()
+
+    if (!value) {
+      handleMunicipalityChange("all")
+      return
+    }
+
+    const exactMatch = municipalities.find(
+      m => m.name.toLowerCase() === value.toLowerCase()
+    )
+    if (exactMatch) {
+      handleMunicipalityChange(exactMatch.nis_code)
+    }
+  }
+
+  const resolveMunicipalityFromInput = (rawValue: string) => {
+    const value = rawValue.trim().toLowerCase()
+    if (!value) {
+      handleMunicipalityChange("all")
+      return
+    }
+
+    const exactMatch = municipalities.find(
+      m => m.name.toLowerCase() === value
+    )
+    if (exactMatch) {
+      handleMunicipalityChange(exactMatch.nis_code)
+      return
+    }
+
+    const startsWithMatch = municipalities.find(
+      m => m.name.toLowerCase().startsWith(value)
+    )
+    if (startsWithMatch) {
+      handleMunicipalityChange(startsWithMatch.nis_code)
+      return
+    }
+
+    setIsAutocompleteOpen(true)
   }
 
   const handleCategoryToggle = (categoryId: string) => {
@@ -97,34 +185,24 @@ export function ProjectFiltersComponent({
       : [...currentCategories, categoryId]
 
     if (newCategories.length === 0) {
-      const { categories, ...rest } = filters
-      setFilters(rest)
+      const nextFilters = { ...filters }
+      delete nextFilters.categories
+      setFilters(nextFilters)
     } else {
       setFilters({ ...filters, categories: newCategories })
     }
   }
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Sanitize and limit search query to 200 characters
-    const sanitizedQuery = searchInput.trim().slice(0, 200)
-    if (sanitizedQuery) {
-      setFilters({ ...filters, searchQuery: sanitizedQuery })
-    } else {
-      const { searchQuery, ...rest } = filters
-      setFilters(rest)
-    }
-  }
-
   const handleReset = () => {
     setFilters({})
-    setSearchInput("")
+    setMunicipalityInput("")
   }
 
   const hasActiveFilters =
     filters.nis_code ||
-    (filters.categories && filters.categories.length > 0) ||
-    filters.searchQuery
+    (filters.categories && filters.categories.length > 0)
+
+  const municipalitySelected = Boolean(filters.nis_code)
 
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -138,73 +216,73 @@ export function ProjectFiltersComponent({
         )}
       </div>
 
-      {/* Municipality and Sort */}
+      {/* Municipality autocomplete + sort */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="municipality">Gemeente</Label>
-          <Popover open={muniOpen} onOpenChange={setMuniOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={muniOpen}
-                className="w-full justify-between font-normal"
-                id="municipality"
-              >
-                {filters.nis_code
-                  ? municipalities.find(m => m.nis_code === filters.nis_code)?.name
-                  : "alle gemeenten"}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-              <Command filter={(value, search) => {
-                // Custom filter for case-insensitive searching
-                return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
-              }}>
-                <CommandInput placeholder="Zoek gemeente..." />
-                <CommandList>
-                  <CommandEmpty>geen gemeente gevonden.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      value="all"
-                      onSelect={() => {
-                        handleMunicipalityChange("all")
-                        setMuniOpen(false)
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          !filters.nis_code ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      Alle gemeenten
-                    </CommandItem>
-                    {municipalities.map((muni) => (
-                      <CommandItem
-                        key={muni.nis_code}
-                        value={muni.name}
-                        onSelect={(currentValue) => {
-                          const nis_code = municipalities.find(m => m.name === currentValue)?.nis_code || currentValue
-                          handleMunicipalityChange(nis_code)
-                          setMuniOpen(false)
+          <Label htmlFor="municipality-search">Gemeente</Label>
+          <div className="relative">
+            <Input
+              id="municipality-search"
+              placeholder={municipalities.length > 0 ? "Typ om gemeente te zoeken..." : "Gemeenten laden..."}
+              value={municipalityInput}
+              onChange={(e) => handleMunicipalityInputChange(e.target.value)}
+              onFocus={() => setIsAutocompleteOpen(true)}
+              onBlur={(e) => {
+                window.setTimeout(() => {
+                  setIsAutocompleteOpen(false)
+                  resolveMunicipalityFromInput(e.target.value)
+                }, 120)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  const topMatch = filteredMunicipalities[0]
+                  if (topMatch) {
+                    handleMunicipalityChange(topMatch.nis_code)
+                  } else {
+                    resolveMunicipalityFromInput(municipalityInput)
+                  }
+                }
+              }}
+              autoComplete="off"
+            />
+
+            {isAutocompleteOpen && (
+              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-background shadow-lg">
+                {filteredMunicipalities.length > 0 ? (
+                  <>
+                    {(filters.nis_code || municipalityInput.trim()) && (
+                      <button
+                        type="button"
+                        className="block w-full border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          handleMunicipalityChange("all")
                         }}
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            filters.nis_code === muni.nis_code ? "opacity-100" : "opacity-0"
-                          )}
-                        />
+                        Alle gemeenten
+                      </button>
+                    )}
+                    {filteredMunicipalities.map((muni) => (
+                      <button
+                        key={muni.nis_code}
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          handleMunicipalityChange(muni.nis_code)
+                        }}
+                      >
                         {muni.name}
-                      </CommandItem>
+                      </button>
                     ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+                  </>
+                ) : (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">Geen gemeente gevonden</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
@@ -224,7 +302,7 @@ export function ProjectFiltersComponent({
       </div>
 
       {/* Categories */}
-      {metadata && (
+      {metadata && municipalitySelected && (
         <div>
           <Label className="mb-2 block">categorieën</Label>
           <div className="flex flex-wrap gap-2">
@@ -232,15 +310,12 @@ export function ProjectFiltersComponent({
               .sort((a, b) => {
                 const countA = categoryCounts[a[0]] ?? 0
                 const countB = categoryCounts[b[0]] ?? 0
-                // Sort by current counts, then by label
                 if (countB !== countA) return countB - countA
                 return a[1].label.localeCompare(b[1].label)
               })
               .map(([id, cat]) => {
                 const isActive = filters.categories?.includes(id)
                 const currentCount = categoryCounts[id] ?? 0
-
-                // Only show badge if count > 0 OR if it was already selected (to allow deselecting)
                 if (currentCount === 0 && !isActive) return null
 
                 return (
@@ -265,13 +340,10 @@ export function ProjectFiltersComponent({
           <div className="flex flex-wrap gap-2">
             {filters.nis_code && (
               <Badge variant="secondary">
-                Gemeente: {municipalities.find(m => m.nis_code === filters.nis_code)?.name}
+                Gemeente: {selectedMunicipalityName || filters.nis_code}
                 <X
                   className="ml-1 h-3 w-3 cursor-pointer"
-                  onClick={() => {
-                    const { nis_code, ...rest } = filters
-                    setFilters(rest)
-                  }}
+                  onClick={() => handleMunicipalityChange("all")}
                 />
               </Badge>
             )}
@@ -287,42 +359,9 @@ export function ProjectFiltersComponent({
                 </Badge>
               )
             })}
-            {filters.searchQuery && (
-              <Badge variant="secondary">
-                Zoekterm: &quot;{filters.searchQuery}&quot;
-                <X
-                  className="ml-1 h-3 w-3 cursor-pointer"
-                  onClick={() => {
-                    const { searchQuery, ...rest } = filters
-                    setFilters(rest)
-                    setSearchInput("")
-                  }}
-                />
-              </Badge>
-            )}
           </div>
         </div>
       )}
-
-      {/* Search - moved to bottom and made smaller */}
-      <form onSubmit={handleSearchSubmit} className="pt-4 border-t">
-        <Label htmlFor="search" className="text-sm mb-2 block">Zoeken in projectnamen en beschrijvingen</Label>
-        <div className="flex gap-2">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="search"
-              type="text"
-              placeholder="Zoekterm..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-9 h-9"
-              maxLength={200}
-            />
-          </div>
-          <Button type="submit" size="sm">Zoeken</Button>
-        </div>
-      </form>
     </div>
   )
 }
