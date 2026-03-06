@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import { cn } from "@/lib/utils"
 
 interface ProjectFiltersComponentProps {
   filters: ProjectFilters
@@ -34,6 +35,7 @@ export function ProjectFiltersComponent({
 }: ProjectFiltersComponentProps) {
   const [municipalityInput, setMunicipalityInput] = useState("")
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
 
   // Prefer metadata index (all municipalities), fallback to loaded projects
   const municipalities = useMemo(() => {
@@ -79,6 +81,21 @@ export function ProjectFiltersComponent({
 
     return scored
   }, [municipalities, municipalityInput])
+
+  // Flat list of selectable options for keyboard navigation
+  const visibleOptions = useMemo(() => {
+    if (filteredMunicipalities.length === 0) return []
+    const showAll = Boolean(filters.nis_code || municipalityInput.trim())
+    const items: Array<{ id: string; label: string; value: string }> = []
+    if (showAll) items.push({ id: "__all__", label: "Alle gemeenten", value: "all" })
+    filteredMunicipalities.forEach((m) => items.push({ id: m.nis_code, label: m.name, value: m.nis_code }))
+    return items
+  }, [filters.nis_code, municipalityInput, filteredMunicipalities])
+
+  // Reset keyboard highlight when the dropdown closes or the option list changes
+  useEffect(() => {
+    setHighlightedIndex(-1)
+  }, [isAutocompleteOpen, visibleOptions])
 
   // Calculate project counts per category for the selected municipality
   const categoryCounts = useMemo(() => {
@@ -223,6 +240,16 @@ export function ProjectFiltersComponent({
           <div className="relative">
             <Input
               id="municipality-search"
+              role="combobox"
+              aria-expanded={isAutocompleteOpen}
+              aria-haspopup="listbox"
+              aria-controls="municipality-listbox"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                isAutocompleteOpen && highlightedIndex >= 0
+                  ? `municipality-option-${visibleOptions[highlightedIndex]?.id}`
+                  : undefined
+              }
               placeholder={municipalities.length > 0 ? "Typ om gemeente te zoeken..." : "Gemeenten laden..."}
               value={municipalityInput}
               onChange={(e) => handleMunicipalityInputChange(e.target.value)}
@@ -234,53 +261,76 @@ export function ProjectFiltersComponent({
                 }, 120)
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  const topMatch = filteredMunicipalities[0]
-                  if (topMatch) {
-                    handleMunicipalityChange(topMatch.nis_code)
-                  } else {
-                    resolveMunicipalityFromInput(municipalityInput)
+                switch (e.key) {
+                  case "ArrowDown":
+                    e.preventDefault()
+                    setIsAutocompleteOpen(true)
+                    setHighlightedIndex((prev) =>
+                      prev < visibleOptions.length - 1 ? prev + 1 : prev
+                    )
+                    break
+                  case "ArrowUp":
+                    e.preventDefault()
+                    setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1))
+                    break
+                  case "Enter": {
+                    e.preventDefault()
+                    const highlighted = visibleOptions[highlightedIndex]
+                    if (highlighted) {
+                      handleMunicipalityChange(highlighted.value)
+                    } else {
+                      const topMatch = filteredMunicipalities[0]
+                      if (topMatch) {
+                        handleMunicipalityChange(topMatch.nis_code)
+                      } else {
+                        resolveMunicipalityFromInput(municipalityInput)
+                      }
+                    }
+                    break
                   }
+                  case "Escape":
+                    e.preventDefault()
+                    setIsAutocompleteOpen(false)
+                    break
                 }
               }}
               autoComplete="off"
             />
 
             {isAutocompleteOpen && (
-              <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-background shadow-lg">
+              <ul
+                id="municipality-listbox"
+                role="listbox"
+                aria-label="Gemeente suggesties"
+                className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-background shadow-lg list-none m-0 p-0"
+              >
                 {filteredMunicipalities.length > 0 ? (
-                  <>
-                    {(filters.nis_code || municipalityInput.trim()) && (
-                      <button
-                        type="button"
-                        className="block w-full border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                        onMouseDown={(event) => {
-                          event.preventDefault()
-                          handleMunicipalityChange("all")
-                        }}
-                      >
-                        Alle gemeenten
-                      </button>
-                    )}
-                    {filteredMunicipalities.map((muni) => (
-                      <button
-                        key={muni.nis_code}
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                        onMouseDown={(event) => {
-                          event.preventDefault()
-                          handleMunicipalityChange(muni.nis_code)
-                        }}
-                      >
-                        {muni.name}
-                      </button>
-                    ))}
-                  </>
+                  visibleOptions.map((option, index) => (
+                    <li
+                      key={option.id}
+                      id={`municipality-option-${option.id}`}
+                      role="option"
+                      aria-selected={index === highlightedIndex}
+                      className={cn(
+                        "px-3 py-2 text-left text-sm cursor-pointer",
+                        option.value === "all" && "border-b text-muted-foreground",
+                        index === highlightedIndex
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      )}
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                        handleMunicipalityChange(option.value)
+                      }}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                    >
+                      {option.label}
+                    </li>
+                  ))
                 ) : (
-                  <p className="px-3 py-2 text-sm text-muted-foreground">Geen gemeente gevonden</p>
+                  <li className="px-3 py-2 text-sm text-muted-foreground">Geen gemeente gevonden</li>
                 )}
-              </div>
+              </ul>
             )}
           </div>
         </div>
