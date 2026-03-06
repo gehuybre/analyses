@@ -24,6 +24,9 @@ interface ProjectFiltersComponentProps {
   setSortOption: (option: SortOption) => void
 }
 
+const MIN_QUERY_LENGTH = 2
+const MAX_RESULTS = 20
+
 export function ProjectFiltersComponent({
   filters,
   setFilters,
@@ -60,12 +63,13 @@ export function ProjectFiltersComponent({
 
   const filteredMunicipalities = useMemo(() => {
     const query = municipalityInput.trim().toLowerCase()
-    const scored = municipalities
+    if (query.length < MIN_QUERY_LENGTH) return []
+
+    return municipalities
       .map((muni) => {
         const name = muni.name.toLowerCase()
         let score = 3
-        if (!query) score = 0
-        else if (name === query) score = 0
+        if (name === query) score = 0
         else if (name.startsWith(query)) score = 1
         else if (name.includes(query)) score = 2
 
@@ -76,8 +80,7 @@ export function ProjectFiltersComponent({
         if (a.score !== b.score) return a.score - b.score
         return a.name.localeCompare(b.name)
       })
-
-    return scored
+      .slice(0, MAX_RESULTS)
   }, [municipalities, municipalityInput])
 
   // Calculate project counts per category for the selected municipality
@@ -249,7 +252,9 @@ export function ProjectFiltersComponent({
 
             {isAutocompleteOpen && (
               <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-background shadow-lg">
-                {filteredMunicipalities.length > 0 ? (
+                {municipalityInput.trim().length < MIN_QUERY_LENGTH ? (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">Typ minimaal {MIN_QUERY_LENGTH} tekens om te zoeken</p>
+                ) : filteredMunicipalities.length > 0 ? (
                   <>
                     {(filters.nis_code || municipalityInput.trim()) && (
                       <button
