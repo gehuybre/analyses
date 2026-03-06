@@ -368,7 +368,7 @@ export function ProjectBrowser() {
       "NIS Code",
       "Project Code",
       "Project Naam",
-      "Categorieen",
+      "Categorieën",
       "Totaal Bedrag",
       "2026",
       "2027",
