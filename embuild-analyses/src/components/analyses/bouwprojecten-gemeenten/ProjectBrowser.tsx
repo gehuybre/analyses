@@ -67,9 +67,14 @@ export function ProjectBrowser() {
             continue
           }
           const localData = await localResponse.json()
+          // Prefer a local metadata file that already has a non-empty municipality index
           if (Array.isArray(localData?.municipality_index) && localData.municipality_index.length > 0) {
             data = localData
             break
+          }
+          // Otherwise, keep the first successful local metadata as a base for later index merge
+          if (!data) {
+            data = localData
           }
         }
       }
