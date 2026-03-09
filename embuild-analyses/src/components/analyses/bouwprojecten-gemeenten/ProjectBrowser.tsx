@@ -143,7 +143,7 @@ export function ProjectBrowser() {
             const controller = new AbortController()
             timeoutId = setTimeout(() => controller.abort(), 30000)
 
-            const response = await fetch(url, { signal: controller.signal })
+            const response = await fetch(url, { signal: controller.signal, cache: "no-cache" })
             if (!response.ok) {
               continue
             }
