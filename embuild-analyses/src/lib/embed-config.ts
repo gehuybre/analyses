@@ -491,6 +491,41 @@ export const EMBED_CONFIGS: AnalysisEmbedConfig[] = [
       },
     },
   },
+  {
+    slug: "inschrijvingen-onderwijs",
+    sections: {
+      "totale-inschrijvingen": {
+        type: "custom",
+        title: "Totale inschrijvingen",
+        component: "InschrijvingenOnderwijsEmbed",
+        height: 700,
+      },
+      "type-instelling": {
+        type: "custom",
+        title: "Verdeling type onderwijsinstelling",
+        component: "InschrijvingenOnderwijsEmbed",
+        height: 700,
+      },
+      "bouw-studiegebieden": {
+        type: "custom",
+        title: "Bouwgerelateerde studiegebieden",
+        component: "InschrijvingenOnderwijsEmbed",
+        height: 700,
+      },
+      opleiding: {
+        type: "custom",
+        title: "Top opleidingen",
+        component: "InschrijvingenOnderwijsEmbed",
+        height: 700,
+      },
+      studiegebied: {
+        type: "custom",
+        title: "Top studiegebieden",
+        component: "InschrijvingenOnderwijsEmbed",
+        height: 700,
+      },
+    },
+  },
 ]
 
 /**

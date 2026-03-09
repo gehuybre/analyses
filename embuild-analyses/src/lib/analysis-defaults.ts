@@ -336,6 +336,20 @@ const ANALYSIS_DEFAULTS = {
     selectedCategory: null,
     currentView: 'chart',
   },
+
+  /**
+   * Inschrijvingen Onderwijs (Higher Education Enrollments)
+   *
+   * Defaults:
+   * - timeRange: 'yearly' (dataset is annual)
+   * - selectedProvince: null (Vlaanderen totaal)
+   * - currentView: 'chart'
+   */
+  'inschrijvingen-onderwijs': {
+    timeRange: 'yearly',
+    selectedProvince: null,
+    currentView: 'chart',
+  },
 } as const satisfies Record<string, AnalysisDefaults>
 
 export type AnalysisSlug = keyof typeof ANALYSIS_DEFAULTS

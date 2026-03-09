@@ -24,6 +24,7 @@ import { SilcEnergieEmbed } from "@/components/analyses/silc-energie-2023/SilcEn
 import { PeriodComparisonEmbed } from "@/components/analyses/vergunningen-goedkeuringen/PeriodComparisonEmbed"
 import { VergunningenEmbed } from "@/components/analyses/vergunningen-goedkeuringen/VergunningenEmbed"
 import { ArbeidersBediendenEmbed } from "@/components/analyses/arbeiders-bedienden/ArbeidersBediendenEmbed"
+import { InschrijvingenOnderwijsEmbed } from "@/components/analyses/inschrijvingen-onderwijs/InschrijvingenOnderwijsEmbed"
 import { ProvinceCode, RegionCode } from "@/lib/geo-utils"
 import { getEmbedConfig, getValidSections } from "@/lib/embed-config"
 import { EmbedDataRow, MunicipalityData } from "@/lib/embed-types"
@@ -772,6 +773,35 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
           section={section as "evolution-by-type" | "evolution-by-gender"}
           viewType={urlParams.view === "map" ? "chart" : urlParams.view}
           region={urlParams.region}
+          province={urlParams.province}
+        />
+      )
+    }
+
+    // Handle InschrijvingenOnderwijsEmbed
+    if (config.component === "InschrijvingenOnderwijsEmbed") {
+      const validSections = getValidSections(slug)
+      if (!validSections.includes(section)) {
+        return (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">
+              Ongeldige sectie: {section}. Geldige opties: {validSections.join(", ")}
+            </p>
+          </div>
+        )
+      }
+
+      return (
+        <InschrijvingenOnderwijsEmbed
+          section={
+            section as
+              | "totale-inschrijvingen"
+              | "type-instelling"
+              | "bouw-studiegebieden"
+              | "opleiding"
+              | "studiegebied"
+          }
+          viewType={urlParams.view}
           province={urlParams.province}
         />
       )
