@@ -127,12 +127,12 @@ export function ProjectBrowser() {
 
       const metadataFile = municipalityIndex.get(nisCode)
       const relativeFile = (metadataFile ?? `municipality/${nisCode}.json`).replace(/^\/+/, "")
-      const remoteUrl = getDataPath(`/data/bouwprojecten-gemeenten/${relativeFile}`)
+      const remoteUrl = getDataPath(`/data/bouwprojecten-gemeenten/${relativeFile}?v=${metadataVersion}`)
       const candidateUrls = Array.from(
         new Set([
           remoteUrl,
-          `${getBasePath()}/data/bouwprojecten-gemeenten/${relativeFile}`,
-          `/data/bouwprojecten-gemeenten/${relativeFile}`,
+          `${getBasePath()}/data/bouwprojecten-gemeenten/${relativeFile}?v=${metadataVersion}`,
+          `/data/bouwprojecten-gemeenten/${relativeFile}?v=${metadataVersion}`,
         ])
       )
 
