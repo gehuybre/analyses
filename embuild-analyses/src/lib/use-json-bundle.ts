@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { getDataPath } from "@/lib/path-utils"
+import { getDataPathCandidates } from "@/lib/path-utils"
 
 type JsonBundleState<T> = {
   data: T | null
@@ -23,15 +23,31 @@ export function useJsonBundle<T extends Record<string, unknown>>(paths: Record<s
       setError(null)
 
       try {
+        const parsedPaths = JSON.parse(cacheKey) as Record<string, string>
         const entries = await Promise.all(
-          Object.entries(paths).map(async ([key, path]) => {
-            const url = getDataPath(path)
-            const response = await fetch(url, { signal: controller.signal })
-            if (!response.ok) {
-              throw new Error(`Failed to load ${path}: ${response.status}`)
+          Object.entries(parsedPaths).map(async ([key, path]) => {
+            const candidateUrls = getDataPathCandidates(path)
+            const failures: string[] = []
+
+            for (const url of candidateUrls) {
+              try {
+                const response = await fetch(url, { signal: controller.signal })
+                if (!response.ok) {
+                  failures.push(`${url} (${response.status})`)
+                  continue
+                }
+                const json = await response.json()
+                return [key, json] as const
+              } catch (error) {
+                if (error instanceof Error && error.name === "AbortError") {
+                  throw error
+                }
+                const message = error instanceof Error ? error.message : "network error"
+                failures.push(`${url} (${message})`)
+              }
             }
-            const json = await response.json()
-            return [key, json] as const
+
+            throw new Error(`Failed to load ${path}: ${failures.join(" | ")}`)
           })
         )
 
