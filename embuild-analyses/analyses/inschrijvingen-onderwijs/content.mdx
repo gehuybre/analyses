@@ -1,0 +1,27 @@
+---
+title: Inschrijvingen in het hoger onderwijs in Vlaanderen
+date: 2026-03-09
+summary: Evolutie van inschrijvingen in het hoger onderwijs naar type onderwijsinstelling, opleiding en studiegebied op basis van PinC-data (woonplaats).
+tags: [onderwijs, hoger-onderwijs, studenten, vlaanderen]
+slug: inschrijvingen-onderwijs
+sourceProvider: Onderwijs Vlaanderen via Provincies in Cijfers (PinC)
+sourceTitle: Inschrijvingen in het hoger onderwijs naar type onderwijsinstelling, opleiding en studiegebied - WP
+sourceUrl: https://provincies.incijfers.be/jive/
+sourcePublicationDate: 2025-07-28
+---
+
+import { InschrijvingenOnderwijsDashboard } from "@/components/analyses/inschrijvingen-onderwijs/InschrijvingenOnderwijsDashboard"
+
+Deze analyse toont hoe de inschrijvingen in het hoger onderwijs evolueren voor inwoners van Vlaanderen (woonplaatsdata, WP). De dataset bevat jaren **2017 t.e.m. 2024** en laat uitsplitsingen toe naar type onderwijsinstelling, opleiding en studiegebied.
+
+Belangrijkste signalen uit de meest recente cijfers (2024):
+
+- Totaal Vlaanderen: **302.432** inschrijvingen (+1,5% t.o.v. 2023).
+- Sinds 2017 steeg het totaal met **17,0%** (van 258.496 naar 302.432).
+- Universiteiten en hogescholen zijn bijna even groot in aandeel: 49,5% versus 48,7%.
+- Grootste studiegebieden in absolute aantallen: handelswetenschappen en bedrijfskunde, industriële wetenschappen en technologie, en gezondheidszorg.
+
+Deze pagina legt extra nadruk op **bouwgerelateerde studiegebieden** (architectuur, industriële wetenschappen en technologie, toegepaste wetenschappen).  
+Voor deze PinC hoger-onderwijsbron is er **geen uitsplitsing naar geslacht** beschikbaar; geslachtsanalyse vereist een andere bron dan `onderwijs_ho`.
+
+<InschrijvingenOnderwijsDashboard />
