@@ -65,6 +65,29 @@ export function getDataPath(path: string): string {
 }
 
 /**
+ * Get a same-origin URL for a file in /public, respecting basePath only.
+ * Unlike getPublicPath(), this never rewrites /data/* to an external data host.
+ */
+export function getLocalPublicPath(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const basePath = getBasePath();
+  return `${basePath}${normalizedPath}`;
+}
+
+/**
+ * Get candidate URLs for loading a data file:
+ * 1) external data host (if configured)
+ * 2) local same-origin public file fallback
+ */
+export function getDataPathCandidates(path: string): string[] {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const primary = getDataPath(normalizedPath);
+  const localRawPath = normalizedPath;
+  const localBasePath = getLocalPublicPath(normalizedPath);
+  return Array.from(new Set([primary, localRawPath, localBasePath]));
+}
+
+/**
  * Get a public asset URL with proper basePath handling
  * @param path - The path relative to /public (e.g., '/data/file.json')
  * @returns The full path including basePath if needed

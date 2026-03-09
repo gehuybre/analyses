@@ -34,6 +34,15 @@ def parse_args() -> argparse.Namespace:
     script_path = Path(__file__).resolve()
     repo_root = find_repo_root(script_path)
     analysis_root = repo_root / "analyses" / "embuild-analyses" / "analyses" / "inschrijvingen-onderwijs"
+    public_results_root = (
+        repo_root
+        / "analyses"
+        / "embuild-analyses"
+        / "public"
+        / "analyses"
+        / "inschrijvingen-onderwijs"
+        / "results"
+    )
     parser = argparse.ArgumentParser(
         description="Download en verwerk PinC data voor inschrijvingen hoger onderwijs (WP)."
     )
@@ -56,6 +65,11 @@ def parse_args() -> argparse.Namespace:
         "--data-repo-root",
         default=str(repo_root / "data"),
         help="Rootmap van de data-repo (bevat analyses/ en docs/).",
+    )
+    parser.add_argument(
+        "--public-results-dir",
+        default=str(public_results_root),
+        help="Outputmap in embuild-analyses/public voor lokaal/offline testen.",
     )
     parser.add_argument(
         "--timeout",
@@ -187,6 +201,7 @@ def main() -> int:
     env_path = Path(args.env_file).resolve()
     analysis_results_dir = Path(args.analysis_results_dir).resolve()
     data_repo_root = Path(args.data_repo_root).resolve()
+    public_results_dir = Path(args.public_results_dir).resolve()
 
     api_key = get_api_key(env_path, args.api_key_name)
     session = requests.Session()
@@ -468,6 +483,7 @@ def main() -> int:
 
     output_dirs = [
         analysis_results_dir,
+        public_results_dir,
         data_repo_root / "analyses" / "inschrijvingen-onderwijs" / "results",
         data_repo_root / "docs" / "analyses" / "inschrijvingen-onderwijs" / "results",
     ]
