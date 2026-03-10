@@ -126,9 +126,8 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
         "3 personen": d.hh_3_abs_toename ?? 0,
         "4+ personen": d["hh_4+_abs_toename"] ?? 0,
       }))
-      .filter(d => d.total > 0)
       .sort((a, b) => b.total - a.total)
-      .slice(0, 15) // Top 15 municipalities
+      .slice(0, 15) // Max 15 municipalities
   }, [cleanData])
 
   // Y-axis formatters and labels
@@ -198,19 +197,19 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
                 formatter={(value) => (typeof value === 'number' ? value.toFixed(1) + '%' : value)}
               />
               <Legend />
-              <Bar dataKey="min" fill="transparent" stroke="var(--color-chart-1)" stackId="a" />
-              <Bar dataKey="q1" fill="var(--color-chart-1)" opacity={0.3} stackId="a" />
-              <Bar dataKey="median" fill="var(--color-chart-1)" opacity={0.6} stackId="a" />
-              <Bar dataKey="q3" fill="var(--color-chart-1)" opacity={0.3} stackId="a" />
-              <Bar dataKey="max" fill="transparent" stroke="var(--color-chart-1)" stackId="a" />
-              <Line type="monotone" dataKey="mean" stroke="var(--color-chart-5)" strokeWidth={2} dot={{ r: 4 }} />
+              <Bar name="Minimum" dataKey="min" fill="transparent" stroke="var(--color-chart-1)" stackId="a" />
+              <Bar name="Kwartiel 1 (Q1)" dataKey="q1" fill="var(--color-chart-1)" opacity={0.3} stackId="a" />
+              <Bar name="Mediaan" dataKey="median" fill="var(--color-chart-1)" opacity={0.6} stackId="a" />
+              <Bar name="Kwartiel 3 (Q3)" dataKey="q3" fill="var(--color-chart-1)" opacity={0.3} stackId="a" />
+              <Bar name="Maximum" dataKey="max" fill="transparent" stroke="var(--color-chart-1)" stackId="a" />
+              <Line name="Gemiddelde" type="monotone" dataKey="mean" stroke="var(--color-chart-5)" strokeWidth={2} dot={{ r: 4 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
 
         {/* Total absolute growth */}
         <div>
-          <h3 className="text-lg font-medium mb-3">Totale absolute toename per gemeente (top 15)</h3>
+          <h3 className="text-lg font-medium mb-3">Totale absolute toename per gemeente (max 15)</h3>
           <div className="text-sm font-medium ml-16 mb-1">
             {totalYAxisLabel.text}
             <span className="font-bold">{totalYAxisLabel.boldText}</span>
@@ -245,7 +244,7 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
 
       {/* Stacked bar chart - Absolute growth breakdown */}
       <div>
-        <h3 className="text-lg font-medium mb-3">Absolute toename per huishoudensgrootte (top 15 gemeenten)</h3>
+        <h3 className="text-lg font-medium mb-3">Absolute toename per huishoudensgrootte (max 15 gemeenten)</h3>
         <div className="text-sm font-medium ml-16 mb-1">
           {stackedYAxisLabel.text}
           <span className="font-bold">{stackedYAxisLabel.boldText}</span>
