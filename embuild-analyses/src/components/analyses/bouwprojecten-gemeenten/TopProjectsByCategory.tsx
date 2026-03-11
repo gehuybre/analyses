@@ -162,9 +162,9 @@ export function TopProjectsByCategory() {
                                   ac_short: project.ac_short,
                                   ac_long: project.ac_long || project.ap_long || project.bd_long || project.ap_short || project.bd_short || project.ac_short,
                                   total_amount: project.total_amount,
-                                  amount_per_capita: 0,
+                                  amount_per_capita: project.amount_per_capita || 0,
                                   yearly_amounts: project.yearly_amounts as Project['yearly_amounts'],
-                                  yearly_per_capita: {
+                                  yearly_per_capita: (project.yearly_per_capita as Project['yearly_per_capita']) || {
                                     "2026": 0,
                                     "2027": 0,
                                     "2028": 0,

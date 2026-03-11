@@ -12,6 +12,7 @@ import pandas as pd
 import json
 import re
 from pathlib import Path
+from typing import Dict, List
 from category_keywords import classify_project, classify_project_by_policy_domain, get_category_label, CATEGORY_DEFINITIONS, summarize_projects_by_category
 
 # Directories
@@ -29,6 +30,169 @@ if DATA_REPO_AVAILABLE:
 # Input files
 INPUT_CSV = DATA_DIR / 'data-54.csv'  # Primary data source with policy categorization
 PARQUET_FULL = SCRIPT_DIR.parent / 'results' / 'projects_2026_full.parquet'
+
+
+def _safe_parent(path: Path, level: int):
+    """Return parent at `level` if available, else None."""
+    return path.parents[level] if len(path.parents) > level else None
+
+
+def _try_parse_float(value):
+    """Best-effort float parser for JSON values."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    try:
+        return float(value)
+    except Exception:
+        try:
+            return float(str(value).replace(',', '.'))
+        except Exception:
+            return None
+
+
+def _median(values: List[float]):
+    """Compute median for a non-empty numeric list."""
+    sorted_values = sorted(values)
+    n = len(sorted_values)
+    mid = n // 2
+    if n % 2 == 1:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2
+
+
+def _find_investments_data_dir():
+    """Find a directory containing bv_municipality_data_chunk_*.json files."""
+    p4 = _safe_parent(SCRIPT_DIR, 4)
+    p5 = _safe_parent(SCRIPT_DIR, 5)
+    candidates = [
+        SCRIPT_DIR.parent.parent.parent / 'public' / 'data' / 'gemeentelijke-investeringen',
+        (p4 / 'public' / 'data' / 'gemeentelijke-investeringen') if p4 else None,
+        (p5 / 'data' / 'data' / 'gemeentelijke-investeringen') if p5 else None,
+        (p4 / 'data' / 'data' / 'gemeentelijke-investeringen') if p4 else None,
+        Path.cwd() / 'data' / 'data' / 'gemeentelijke-investeringen',
+    ]
+
+    seen = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate = candidate.resolve()
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.exists() and list(candidate.glob('bv_municipality_data_chunk_*.json')):
+            return candidate
+
+    return None
+
+
+def load_population_lookup():
+    """
+    Build a NIS -> population lookup from gemeentelijke-investeringen data.
+
+    Population is inferred as Totaal / Per_inwoner and aggregated with a median
+    to reduce the impact of outliers.
+    """
+    investments_dir = _find_investments_data_dir()
+    if not investments_dir:
+        print("Warning: Could not find gemeentelijke-investeringen chunk data for per-capita calculation")
+        return {}
+
+    chunk_files = sorted(investments_dir.glob('bv_municipality_data_chunk_*.json'))
+    print(f"Loading population lookup from {len(chunk_files)} municipal investment chunks in {investments_dir}")
+
+    ratios_2026: Dict[str, List[float]] = {}
+    ratios_all_years: Dict[str, List[float]] = {}
+    outlier_count = 0
+
+    for chunk_file in chunk_files:
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            rows = json.load(f)
+
+        for row in rows:
+            nis_raw = row.get('NIS_code')
+            nis_code = str(nis_raw).strip() if nis_raw is not None else ''
+            if not nis_code:
+                continue
+
+            total = _try_parse_float(row.get('Totaal'))
+            per_inwoner = _try_parse_float(row.get('Per_inwoner'))
+            if not total or not per_inwoner or total <= 0 or per_inwoner <= 0:
+                continue
+
+            inferred_population = total / per_inwoner
+            # Drop clearly implausible ratios to avoid known parse outliers.
+            if inferred_population < 1000 or inferred_population > 2_000_000:
+                outlier_count += 1
+                continue
+
+            ratios_all_years.setdefault(nis_code, []).append(inferred_population)
+
+            rapportjaar = row.get('Rapportjaar')
+            if rapportjaar == 2026 or str(rapportjaar) == '2026':
+                ratios_2026.setdefault(nis_code, []).append(inferred_population)
+
+    population_lookup = {}
+    nis_codes = set(ratios_all_years.keys()) | set(ratios_2026.keys())
+    for nis_code in nis_codes:
+        values = ratios_2026.get(nis_code) or ratios_all_years.get(nis_code, [])
+        if not values:
+            continue
+        population_lookup[nis_code] = _median(values)
+
+    print(
+        f"Built population lookup for {len(population_lookup)} municipalities "
+        f"(filtered {outlier_count} outlier rows)"
+    )
+    return population_lookup
+
+
+def apply_per_capita(projects, population_lookup):
+    """Populate per-capita values on project records using NIS-level population lookup."""
+    if not projects:
+        return projects
+
+    missing_population = 0
+    updated = 0
+
+    for project in projects:
+        nis_code = str(project.get('nis_code', '')).strip()
+        population = population_lookup.get(nis_code)
+
+        yearly_amounts = project.get('yearly_amounts') or {}
+        yearly_per_capita = {}
+
+        if population and population > 0:
+            total_amount = _try_parse_float(project.get('total_amount')) or 0
+            project['amount_per_capita'] = round(total_amount / population, 2) if total_amount > 0 else 0
+
+            for year, amount in yearly_amounts.items():
+                amount_value = _try_parse_float(amount) or 0
+                yearly_per_capita[str(year)] = round(amount_value / population, 2) if amount_value > 0 else 0
+
+            updated += 1
+        else:
+            missing_population += 1
+            project['amount_per_capita'] = 0
+            for year in yearly_amounts.keys():
+                yearly_per_capita[str(year)] = 0
+
+        # Ensure complete 2026-2031 range for UI compatibility
+        for year in range(2026, 2032):
+            yearly_per_capita.setdefault(str(year), 0)
+
+        project['yearly_per_capita'] = yearly_per_capita
+
+    print(
+        f"Per-capita values updated for {updated}/{len(projects)} projects; "
+        f"{missing_population} without population lookup"
+    )
+    return projects
 
 
 def load_input_dataframe():
@@ -328,7 +492,7 @@ def process_projects(df, nis_lookups, policy_lookup=None):
         project_data["yearly_amounts"] = {
             str(k): round(v, 2) for k, v in project_data["yearly_amounts"].items()
         }
-        # Initialize per_capita as 0 for now (would need population data to calculate properly)
+        # Per-capita fields are populated in a dedicated post-processing step.
         project_data["amount_per_capita"] = 0
         project_data["yearly_per_capita"] = {str(y): 0 for y in range(2026, 2032)}
         projects.append(project_data)
@@ -524,6 +688,10 @@ def main():
         # Raw CSV dataframe - run full processing
         df = data
         projects = process_projects(df, nis_lookups, policy_lookup)
+
+    # Ensure per-capita values are populated from inferred municipality populations.
+    population_lookup = load_population_lookup()
+    projects = apply_per_capita(projects, population_lookup)
 
     # Chunk and save (will write updated metadata including per-category summaries)
     chunk_and_save(projects)

@@ -53,7 +53,9 @@ export interface CategoryMetadata {
     municipality: string
     nis_code: string
     total_amount: number
+    amount_per_capita?: number
     yearly_amounts: Record<string, number>
+    yearly_per_capita?: Record<string, number>
   }>
 }
 

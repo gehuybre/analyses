@@ -77,9 +77,11 @@ export function ProjectDetailModal({
             <span className="text-3xl font-bold">
               €{formatNumber(project.total_amount)}
             </span>
-            <span className="text-muted-foreground">
-              (€{formatNumber(project.amount_per_capita)} per inwoner)
-            </span>
+            {project.amount_per_capita > 0 && (
+              <span className="text-muted-foreground">
+                (€{formatNumber(project.amount_per_capita)} per inwoner)
+              </span>
+            )}
           </div>
         </div>
 

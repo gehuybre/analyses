@@ -264,7 +264,9 @@ def summarize_projects_by_category(projects, top_n=5):
                 'municipality': p.get('municipality'),
                 'nis_code': p.get('nis_code'),
                 'total_amount': round(p.get('total_amount', 0), 2),
+                'amount_per_capita': round(p.get('amount_per_capita', 0), 2),
                 'yearly_amounts': p.get('yearly_amounts', {}),
+                'yearly_per_capita': p.get('yearly_per_capita', {}),
             })
 
         summaries[cat_id] = {
