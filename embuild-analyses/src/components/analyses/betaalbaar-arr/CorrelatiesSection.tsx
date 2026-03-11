@@ -13,7 +13,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   Line,
   ZAxis,
   Cell,
@@ -22,6 +21,14 @@ import { useEmbedFilters, useGeoFilters } from "@/lib/stores/embed-filters-store
 
 interface CorrelatiesSectionProps {
   data: MunicipalityData[]
+}
+
+interface TooltipEntry {
+  name?: string
+  value?: number | string
+  payload?: {
+    name?: string
+  }
 }
 
 const columns = [
@@ -34,35 +41,83 @@ const columns = [
 function calculateOLS(points: Array<{ x: number; y: number }>) {
   const n = points.length
   if (n === 0) return { slope: 0, intercept: 0, rSquared: 0 }
+  if (n === 1) return { slope: 0, intercept: points[0].y, rSquared: 0 }
 
   const sumX = points.reduce((sum, p) => sum + p.x, 0)
   const sumY = points.reduce((sum, p) => sum + p.y, 0)
   const sumXY = points.reduce((sum, p) => sum + p.x * p.y, 0)
   const sumXX = points.reduce((sum, p) => sum + p.x * p.x, 0)
-  const sumYY = points.reduce((sum, p) => sum + p.y * p.y, 0)
+  const denominator = n * sumXX - sumX * sumX
 
-  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX)
+  if (denominator === 0) {
+    return { slope: 0, intercept: sumY / n, rSquared: 0 }
+  }
+
+  const slope = (n * sumXY - sumX * sumY) / denominator
   const intercept = (sumY - slope * sumX) / n
 
   // Calculate R²
   const meanY = sumY / n
   const ssTotal = points.reduce((sum, p) => sum + Math.pow(p.y - meanY, 2), 0)
   const ssResidual = points.reduce((sum, p) => sum + Math.pow(p.y - (slope * p.x + intercept), 2), 0)
-  const rSquared = 1 - (ssResidual / ssTotal)
+  const rSquared = ssTotal === 0 ? 0 : 1 - (ssResidual / ssTotal)
 
   return { slope, intercept, rSquared }
 }
 
-const CustomTooltip = ({ active, payload }: any) => {
+function roundUpNice(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1
+
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)))
+  const normalized = value / magnitude
+
+  if (normalized <= 1) return magnitude
+  if (normalized <= 2) return 2 * magnitude
+  if (normalized <= 5) return 5 * magnitude
+  return 10 * magnitude
+}
+
+function createPositiveDomain(values: number[], padding = 0.05): [number, number] {
+  const finiteValues = values.filter(v => Number.isFinite(v) && v >= 0)
+
+  if (finiteValues.length === 0) return [0, 1]
+
+  const maxValue = Math.max(...finiteValues)
+  if (maxValue === 0) return [0, 1]
+
+  return [0, roundUpNice(maxValue * (1 + padding))]
+}
+
+function formatAxisInteger(value: number): string {
+  return value.toLocaleString("nl-BE", { maximumFractionDigits: 0 })
+}
+
+function formatIntegerValue(value: number | string | undefined): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toLocaleString("nl-BE", { maximumFractionDigits: 0 })
+  }
+
+  if (typeof value === "string") {
+    const asNumber = Number(value)
+    if (Number.isFinite(asNumber)) {
+      return asNumber.toLocaleString("nl-BE", { maximumFractionDigits: 0 })
+    }
+    return value
+  }
+
+  return ""
+}
+
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: TooltipEntry[] }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload
     return (
       <div className="bg-white p-3 border border-slate-200 rounded-md shadow-sm text-sm">
-        <p className="font-semibold mb-1 text-slate-900">{data.name}</p>
-        {payload.map((entry: any, index: number) => (
+        <p className="font-semibold mb-1 text-slate-900">{data?.name}</p>
+        {payload.map((entry, index: number) => (
           <p key={index} className="text-slate-600">
             <span className="font-medium">{entry.name}:</span>{" "}
-            {typeof entry.value === "number" ? entry.value.toLocaleString("nl-BE") : entry.value}
+            {formatIntegerValue(entry.value)}
           </p>
         ))}
       </div>
@@ -104,6 +159,10 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
       }))
       .filter(p => p.x > 0 || p.y > 0)
 
+    if (points.length === 0) {
+      return { points: [], trendline: [], rSquared: 0 }
+    }
+
     const ols = calculateOLS(points)
     const xMin = Math.min(...points.map(p => p.x))
     const xMax = Math.max(...points.map(p => p.x))
@@ -136,6 +195,10 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
       }))
       .filter(p => p.x > 0 || p.y > 0)
 
+    if (points.length === 0) {
+      return { points: [], trendline: [], rSquared: 0 }
+    }
+
     const ols = calculateOLS(points)
     const xMin = Math.min(...points.map(p => p.x))
     const xMax = Math.max(...points.map(p => p.x))
@@ -167,6 +230,10 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
       }))
       .filter(p => p.x > 0 || p.y > 0)
 
+    if (points.length === 0) {
+      return { points: [], trendline: [], rSquared: 0 }
+    }
+
     const ols = calculateOLS(points)
     const xMin = Math.min(...points.map(p => p.x))
     const xMax = Math.max(...points.map(p => p.x))
@@ -196,6 +263,10 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
         code: d.CD_REFNIS,
       }))
       .filter(p => p.x > 0 || p.y > 0)
+
+    if (points.length === 0) {
+      return { points: [], trendline: [], rSquared: 0 }
+    }
 
     const ols = calculateOLS(points)
     const xMin = Math.min(...points.map(p => p.x))
@@ -227,8 +298,12 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
       }))
       .filter(p => p.x > 0 && p.y > 0)
 
+    if (points.length === 0) {
+      return { points: [], trendline: [], referenceLine: [], rSquared: 0 }
+    }
+
     const ols = calculateOLS(points)
-    const xMax = Math.max(...points.map(p => p.x), 20000)
+    const xMax = Math.max(...points.map(p => p.x))
 
     return {
       points,
@@ -243,6 +318,40 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
       rSquared: ols.rSquared,
     }
   }, [data])
+
+  const scatter1YDomain = useMemo(
+    () => createPositiveDomain([
+      ...scatter1Data.points.map(p => p.y),
+      ...scatter1Data.trendline.map(p => p.y),
+    ]),
+    [scatter1Data]
+  )
+
+  const scatter3YDomain = useMemo(
+    () => createPositiveDomain([
+      ...scatter3Data.points.map(p => p.y),
+      ...scatter3Data.trendline.map(p => p.y),
+    ]),
+    [scatter3Data]
+  )
+
+  const scatter5XDomain = useMemo(
+    () => createPositiveDomain([
+      ...scatter5Data.points.map(p => p.x),
+      ...scatter5Data.trendline.map(p => p.x),
+      ...scatter5Data.referenceLine.map(p => p.x),
+    ]),
+    [scatter5Data]
+  )
+
+  const scatter5YDomain = useMemo(
+    () => createPositiveDomain([
+      ...scatter5Data.points.map(p => p.y),
+      ...scatter5Data.trendline.map(p => p.y),
+      ...scatter5Data.referenceLine.map(p => p.y),
+    ]),
+    [scatter5Data]
+  )
 
   return (
     <div className="space-y-6">
@@ -288,7 +397,7 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
                 dataKey="y"
                 name="Nieuwbouw"
                 tick={{ fontSize: 11 }}
-                domain={[0, 650]}
+                domain={scatter1YDomain}
               />
               <ZAxis type="number" dataKey="z" range={[50, 400]} />
               <Tooltip
@@ -296,7 +405,7 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
                 cursor={{ strokeDasharray: '3 3' }}
               />
               <Scatter data={scatter1Data.points} fill="var(--color-chart-1)" fillOpacity={0.6}>
-                {scatter1Data.points.map((entry: any, index: number) => (
+                {scatter1Data.points.map((entry, index: number) => (
                   <Cell
                     key={`cell-1-${index}`}
                     fill={entry.code === selectedHighlightMunicipality ? "var(--color-chart-5)" : "var(--color-chart-1)"}
@@ -351,7 +460,7 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
                 cursor={{ strokeDasharray: '3 3' }}
               />
               <Scatter data={scatter2Data.points} fill="var(--color-chart-2)" fillOpacity={0.6}>
-                {scatter2Data.points.map((entry: any, index: number) => (
+                {scatter2Data.points.map((entry, index: number) => (
                   <Cell
                     key={`cell-2-${index}`}
                     fill={entry.code === selectedHighlightMunicipality ? "var(--color-chart-5)" : "var(--color-chart-2)"}
@@ -399,7 +508,8 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
                 dataKey="y"
                 name="Renovatie"
                 tick={{ fontSize: 11 }}
-                domain={[0, 500]}
+                domain={scatter3YDomain}
+                tickFormatter={formatAxisInteger}
               />
               <ZAxis type="number" dataKey="z" range={[50, 400]} />
               <Tooltip
@@ -407,7 +517,7 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
                 cursor={{ strokeDasharray: '3 3' }}
               />
               <Scatter data={scatter3Data.points} fill="var(--color-chart-3)" fillOpacity={0.6}>
-                {scatter3Data.points.map((entry: any, index: number) => (
+                {scatter3Data.points.map((entry, index: number) => (
                   <Cell
                     key={`cell-3-${index}`}
                     fill={entry.code === selectedHighlightMunicipality ? "var(--color-chart-5)" : "var(--color-chart-3)"}
@@ -462,7 +572,7 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
                 cursor={{ strokeDasharray: '3 3' }}
               />
               <Scatter data={scatter4Data.points} fill="var(--color-chart-4)" fillOpacity={0.6}>
-                {scatter4Data.points.map((entry: any, index: number) => (
+                {scatter4Data.points.map((entry, index: number) => (
                   <Cell
                     key={`cell-4-${index}`}
                     fill={entry.code === selectedHighlightMunicipality ? "var(--color-chart-5)" : "var(--color-chart-4)"}
@@ -505,14 +615,15 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
               name="Huishoudens"
               tick={{ fontSize: 11 }}
               label={{ value: 'Totaal aantal huishoudens (2025)', position: 'insideBottom', offset: -5, fontSize: 11 }}
-              domain={[0, 20000]}
+              domain={scatter5XDomain}
             />
             <YAxis
               type="number"
               dataKey="y"
               name="Woningen"
               tick={{ fontSize: 11 }}
-              domain={[0, 15000]}
+              domain={scatter5YDomain}
+              tickFormatter={formatAxisInteger}
             />
             <ZAxis type="number" dataKey="z" range={[50, 400]} />
             <Tooltip
@@ -520,7 +631,7 @@ export function CorrelatiesSection({ data }: CorrelatiesSectionProps) {
               cursor={{ strokeDasharray: '3 3' }}
             />
             <Scatter data={scatter5Data.points} fill="var(--color-chart-1)" fillOpacity={0.6}>
-              {scatter5Data.points.map((entry: any, index: number) => (
+              {scatter5Data.points.map((entry, index: number) => (
                 <Cell
                   key={`cell-5-${index}`}
                   fill={entry.code === selectedHighlightMunicipality ? "var(--color-chart-5)" : "var(--color-chart-1)"}

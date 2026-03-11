@@ -66,7 +66,7 @@ export function GebouwenparkSection({ data }: GebouwenparkSectionProps) {
             getLabel={(d) => d.TX_REFNIS_NL}
             getValue={(d) => d.Huizen_totaal_2025 ?? 0}
             chartType="bar"
-            yAxisLabel="Aantal huizen"
+            yAxisLabelAbove="Aantal huizen"
             highlightLabel={highlightedName}
           />
         </div>
@@ -79,7 +79,7 @@ export function GebouwenparkSection({ data }: GebouwenparkSectionProps) {
             getLabel={(d) => d.TX_REFNIS_NL}
             getValue={(d) => d.Appartementen_2025 ?? 0}
             chartType="bar"
-            yAxisLabel="Aantal appartementen"
+            yAxisLabelAbove="Aantal appartementen"
             highlightLabel={highlightedName}
           />
         </div>
@@ -99,7 +99,7 @@ export function GebouwenparkSection({ data }: GebouwenparkSectionProps) {
           getLabel={(d) => d.TX_REFNIS_NL}
           getValue={(d) => (d.Appartementen_2025 ?? 0) / (d.Huizen_totaal_2025 ?? 1) * 100}
           chartType="bar"
-          yAxisLabel="Percentage (%)"
+          yAxisLabelAbove="Percentage"
           highlightLabel={highlightedName}
         />
       </div>
