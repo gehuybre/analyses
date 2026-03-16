@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
   createAutoScaledFormatter,
   createYAxisLabel,
+  formatScaledTooltipValue,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
 
@@ -23,7 +24,7 @@ export function InvesteringenChart({ data, selectedMetric }: InvesteringenChartP
   const baseLabel = selectedMetric === 'total' ? 'Investering' : 'Investering per inwoner'
 
   // Auto-scale formatter for Y-axis to prevent label overflow
-  const { formatter: yAxisFormatter, scaleLabel } = useMemo(() => {
+  const { formatter: yAxisFormatter, scaleLabel, scaleUnit } = useMemo(() => {
     const values = data.map(d => d.value)
     return createAutoScaledFormatter(values, true) // true = currency
   }, [data])
@@ -50,7 +51,7 @@ export function InvesteringenChart({ data, selectedMetric }: InvesteringenChartP
             tickFormatter={yAxisFormatter}
           />
           <Tooltip
-            formatter={(value: number | undefined) => value !== undefined ? [yAxisFormatter(value), 'Investering'] : ['', '']}
+            formatter={(value: number | undefined) => value !== undefined ? [formatScaledTooltipValue(value, yAxisFormatter, scaleUnit), 'Investering'] : ['', '']}
             labelFormatter={(label) => `Jaar: ${label}`}
           />
           <Line

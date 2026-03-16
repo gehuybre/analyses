@@ -15,6 +15,7 @@ import {
 import {
     createAutoScaledFormatter,
     createYAxisLabel,
+    formatScaledTooltipValue,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
 
@@ -119,7 +120,7 @@ export function InvesteringenDistributionPlot({
     }, [data, selectedMunicipality])
 
     // Formatters
-    const { formatter: valueFormatter, scaleLabel } = useMemo(() => {
+    const { formatter: valueFormatter, scaleLabel, scaleUnit } = useMemo(() => {
         const values = data.map(d => d.value)
         return createAutoScaledFormatter(values, selectedMetric === 'Totaal')
     }, [data, selectedMetric])
@@ -131,7 +132,7 @@ export function InvesteringenDistributionPlot({
     }, [selectedMetric, scaleLabel])
 
     const formatTooltipValue = (val: number) => {
-        return valueFormatter(val)
+        return formatScaledTooltipValue(val, valueFormatter, scaleUnit)
     }
 
     interface TooltipProps {

@@ -18,6 +18,7 @@ import {
 import {
   createAutoScaledFormatter,
   createYAxisLabel,
+  formatScaledTooltipValue,
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
@@ -162,7 +163,7 @@ export function InvesteringenBVDifferenceSection({ viewType = "chart" }: Investe
       .filter((item): item is { domain: string; label: string; value: number } => Boolean(item))
   }, [lookups, vlaanderenData])
 
-  const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel } = useMemo(() => {
+  const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel, scaleUnit: yAxisScaleUnit } = useMemo(() => {
     const values = chartData.map(d => d.value)
     return createAutoScaledFormatter(values, true)
   }, [chartData])
@@ -250,7 +251,7 @@ export function InvesteringenBVDifferenceSection({ viewType = "chart" }: Investe
                       <Tooltip
                         formatter={(value) => {
                           if (typeof value !== 'number') return ''
-                          return yAxisFormatter(value)
+                          return formatScaledTooltipValue(value, yAxisFormatter, yAxisScaleUnit)
                         }}
                         labelFormatter={(label) => `Domein ${label}`}
                       />

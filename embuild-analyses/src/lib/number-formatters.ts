@@ -60,7 +60,7 @@ export function formatCurrency(value: number, decimals: number = 0): string {
 export function createAutoScaledFormatter(
   values: number[],
   isCurrency: boolean = false
-): { formatter: (value: number) => string; scale: string; scaleLabel: string } {
+): { formatter: (value: number) => string; scale: string; scaleLabel: string; scaleUnit: string } {
   // Filter out invalid values
   const filteredValues = values.filter((v) => !isNaN(v) && isFinite(v))
 
@@ -76,6 +76,7 @@ export function createAutoScaledFormatter(
       },
       scale: "",
       scaleLabel: "",
+      scaleUnit: "",
     }
   }
 
@@ -95,6 +96,7 @@ export function createAutoScaledFormatter(
       },
       scale: "B",
       scaleLabel: "miljarden",
+      scaleUnit: "miljard",
     }
   } else if (maxAbsValue >= 1_000_000) {
     // Million scale
@@ -109,6 +111,7 @@ export function createAutoScaledFormatter(
       },
       scale: "M",
       scaleLabel: "miljoenen",
+      scaleUnit: "miljoen",
     }
   } else if (maxAbsValue >= 10_000) {
     // Thousand scale (only if > 10k to avoid unnecessary scaling)
@@ -123,6 +126,7 @@ export function createAutoScaledFormatter(
       },
       scale: "K",
       scaleLabel: "duizenden",
+      scaleUnit: "duizend",
     }
   }
 
@@ -137,7 +141,17 @@ export function createAutoScaledFormatter(
     },
     scale: "",
     scaleLabel: "",
+    scaleUnit: "",
   }
+}
+
+export function formatScaledTooltipValue(
+  value: number,
+  formatter: (value: number) => string,
+  scaleUnit: string
+): string {
+  const formatted = formatter(value)
+  return scaleUnit ? `${formatted} ${scaleUnit}` : formatted
 }
 
 /**

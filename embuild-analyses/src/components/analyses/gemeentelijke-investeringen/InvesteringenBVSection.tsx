@@ -25,6 +25,7 @@ import { normalizeBvDomainLabel, stripPrefix } from "./labelUtils"
 import {
   createAutoScaledFormatter,
   createYAxisLabel,
+  formatScaledTooltipValue,
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
@@ -300,7 +301,7 @@ export function InvesteringenBVSection() {
   }, [filteredData, selectedMetric, geoSelection])
 
   // Auto-scale formatter for Y-axis to prevent label overflow
-  const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel } = useMemo(() => {
+  const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel, scaleUnit: yAxisScaleUnit } = useMemo(() => {
     const values = chartData.map(d => d.value)
     return createAutoScaledFormatter(values, true) // true = currency
   }, [chartData])
@@ -531,7 +532,7 @@ export function InvesteringenBVSection() {
                         <Tooltip
                           formatter={(value) => {
                             if (typeof value !== 'number') return ''
-                            return yAxisFormatter(value)
+                            return formatScaledTooltipValue(value, yAxisFormatter, yAxisScaleUnit)
                           }}
                           labelFormatter={(label) => `Rapportjaar ${label}`}
                         />
