@@ -12,19 +12,28 @@
  * - Client-side runtime (infers from window.location)
  */
 export function getBasePath(): string {
-  // During SSR/SSG, use environment variable
-  if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const envBasePath = (process.env.NEXT_PUBLIC_BASE_PATH || '').replace(/\/+$/, '')
+  if (envBasePath) {
+    return envBasePath
   }
 
-  // Client-side: infer from current URL path
-  if (window.location.pathname.startsWith('/analyses')) {
-    return '/analyses';
+  // During SSR/SSG, use environment variable
+  if (typeof window === 'undefined') {
+    return ''
   }
-  if (window.location.pathname.startsWith('/data-blog')) {
-    return '/data-blog';
+
+  const host = window.location.hostname
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1'
+  if (!isLocalhost) {
+    // Client-side fallback when env base path isn't set (legacy deployments)
+    if (window.location.pathname.startsWith('/analyses')) {
+      return '/analyses'
+    }
+    if (window.location.pathname.startsWith('/data-blog')) {
+      return '/data-blog'
+    }
   }
-  return '';
+  return ''
 }
 
 /**

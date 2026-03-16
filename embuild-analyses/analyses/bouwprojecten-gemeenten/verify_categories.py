@@ -9,17 +9,28 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 from category_keywords import classify_project, get_category_label
 
-# Load first chunk
+# Load first municipality file from metadata index
 data_dir = Path(__file__).parent.parent.parent / 'public' / 'data' / 'bouwprojecten-gemeenten'
-chunk_file = data_dir / 'projects_2026_chunk_0.json'
+metadata_file = data_dir / 'projects_metadata.json'
 
-with open(chunk_file, 'r', encoding='utf-8') as f:
+with open(metadata_file, 'r', encoding='utf-8') as f:
+    metadata = json.load(f)
+
+municipality_index = metadata.get('municipality_index', [])
+if municipality_index:
+    sample_relative_file = municipality_index[0]['file']
+    sample_file = data_dir / sample_relative_file
+else:
+    # Legacy fallback
+    sample_file = data_dir / 'projects_2026_chunk_0.json'
+
+with open(sample_file, 'r', encoding='utf-8') as f:
     projects = json.load(f)
 
 print("="*80)
-print("CATEGORY VERIFICATION - Sample from chunk 0")
+print(f"CATEGORY VERIFICATION - Sample from {sample_file.name}")
 print("="*80)
-print(f"Total projects in chunk: {len(projects)}")
+print(f"Total projects in sample file: {len(projects)}")
 
 # Check first 10 projects
 matches = 0

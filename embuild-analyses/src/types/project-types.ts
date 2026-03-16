@@ -59,12 +59,21 @@ export interface CategoryMetadata {
   }>
 }
 
+export interface MunicipalityIndexEntry {
+  nis_code: string
+  municipality: string
+  file: string
+  project_count: number
+  total_amount: number
+}
+
 export interface ProjectMetadata {
   total_projects: number
   total_amount: number
   municipalities: number
-  chunks: number
-  chunk_size: number
+  municipality_index?: MunicipalityIndexEntry[]
+  chunks?: number
+  chunk_size?: number
   categories: {
     [key: string]: CategoryMetadata
   }
