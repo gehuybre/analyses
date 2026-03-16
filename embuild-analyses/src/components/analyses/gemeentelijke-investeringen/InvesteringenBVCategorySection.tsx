@@ -7,8 +7,9 @@ import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { ExportButtons } from "../shared/ExportButtons"
 import { formatCurrency } from "@/lib/number-formatters"
+import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
 import { getMunicipalityName } from "./nisUtils"
-import { normalizeBvDomainLabel, stripPrefix } from "./labelUtils"
+import { BV_OTHER_DOMAIN_LABEL, normalizeBvDomainLabel, stripPrefix } from "./labelUtils"
 import { getPublicPath } from "@/lib/path-utils"
 import { SimpleGeoFilter } from "./SimpleGeoFilter"
 import { SimpleGeoContext } from "../shared/GeoContext"
@@ -59,6 +60,24 @@ function validateMetadata(data: unknown): { bv_chunks: number; rek_chunks: numbe
     throw new Error('Invalid metadata: missing or invalid chunk counts')
   }
   return obj as { bv_chunks: number; rek_chunks: number }
+}
+
+const BV_DOMAIN_COLOR_ORDER = [
+  BV_OTHER_DOMAIN_LABEL,
+  "Veiligheidszorg",
+  "Zich verplaatsen en mobiliteit",
+  "Natuur en milieubeheer",
+  "Ondernemen en werken",
+  "Leren en onderwijs",
+  "Zorg en opvang",
+  "Wonen en ruimtelijke ordening",
+  "Cultuur en vrije tijd",
+]
+
+function getBvDomainColor(label: string): string {
+  const index = BV_DOMAIN_COLOR_ORDER.indexOf(label)
+  if (index === -1) return CHART_SERIES_COLORS[0]
+  return CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length]
 }
 
 
@@ -276,8 +295,8 @@ export function InvesteringenBVCategorySection() {
     <SimpleGeoContext.Provider value={{ selection: geoSelection, setSelection: setGeoSelection }}>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Verdeling per beleidsdomein (BV)</CardTitle>
+        <div className="flex items-center justify-between">
+            <CardTitle>Verdeling per beleidsdomein</CardTitle>
             <div className="flex items-center gap-4">
               {loadedChunks < totalChunks && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
@@ -361,6 +380,7 @@ export function InvesteringenBVCategorySection() {
               ) : (
                 categoryData.map((domain, index) => {
                   const isExpanded = expandedDomains.has(domain.label)
+                  const domainColor = getBvDomainColor(domain.label)
                   const toggleExpand = () => {
                     const newExpanded = new Set(expandedDomains)
                     if (isExpanded) {
@@ -403,8 +423,11 @@ export function InvesteringenBVCategorySection() {
                       {/* Bar chart */}
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full transition-all bg-blue-500"
-                          style={{ width: `${(domain.value / maxValue) * 100}%` }}
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${(domain.value / maxValue) * 100}%`,
+                            backgroundColor: domainColor,
+                          }}
                         />
                       </div>
 
