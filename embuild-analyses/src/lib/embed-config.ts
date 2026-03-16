@@ -316,7 +316,7 @@ export const EMBED_CONFIGS: AnalysisEmbedConfig[] = [
     sections: {
       "investments-bv": {
         type: "custom",
-        title: "Investeringen per Beleidsdomein (BV)",
+        title: "Investeringen per beleidsdomein",
         component: "InvesteringenEmbed",
         height: 700,
       },

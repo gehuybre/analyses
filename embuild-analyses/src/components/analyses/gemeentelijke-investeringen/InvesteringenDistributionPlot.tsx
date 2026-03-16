@@ -14,7 +14,6 @@ import {
 } from 'recharts'
 import {
     createAutoScaledFormatter,
-    formatCurrency as formatFullCurrency,
     createYAxisLabel,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
@@ -132,9 +131,7 @@ export function InvesteringenDistributionPlot({
     }, [selectedMetric, scaleLabel])
 
     const formatTooltipValue = (val: number) => {
-        return selectedMetric === 'Totaal'
-            ? formatFullCurrency(val)
-            : `€ ${val.toFixed(2)}`
+        return valueFormatter(val)
     }
 
     interface TooltipProps {
@@ -151,10 +148,10 @@ export function InvesteringenDistributionPlot({
                 <div className="bg-background border border-border rounded-md shadow-lg p-3 text-sm">
                     <p className="font-bold mb-1">Percentiel Groep ({bin.percentileLabel})</p>
                     <p className="text-muted-foreground">
-                        Bereik: {valueFormatter(bin.min)}{scaleLabel} - {valueFormatter(bin.max)}{scaleLabel}
+                        Bereik: {formatTooltipValue(bin.min)} - {formatTooltipValue(bin.max)}
                     </p>
                     <p className="font-medium mt-1">
-                        Mediaan in deze groep: <span className="text-primary">{valueFormatter(bin.medianValue)}{scaleLabel}</span>
+                        Mediaan in deze groep: <span className="text-primary">{formatTooltipValue(bin.medianValue)}</span>
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                         ({bin.count} gemeenten in deze schijf)

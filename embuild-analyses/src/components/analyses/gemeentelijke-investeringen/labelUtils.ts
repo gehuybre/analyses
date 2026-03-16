@@ -26,3 +26,15 @@ export function stripPrefix(label: string): string {
 export function stripPrefixes(labels: string[]): string[] {
   return labels.map(stripPrefix)
 }
+
+const BV_DOMAINS_GROUPED_AS_OTHER = new Set([
+  "Algemeen bestuur",
+  "Algemene financiering",
+])
+
+export const BV_OTHER_DOMAIN_LABEL = "Andere"
+
+export function normalizeBvDomainLabel(label: string): string {
+  const stripped = stripPrefix(label)
+  return BV_DOMAINS_GROUPED_AS_OTHER.has(stripped) ? BV_OTHER_DOMAIN_LABEL : stripped
+}

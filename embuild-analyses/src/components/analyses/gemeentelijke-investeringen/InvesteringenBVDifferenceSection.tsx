@@ -250,7 +250,7 @@ export function InvesteringenBVDifferenceSection({ viewType = "chart" }: Investe
                       <Tooltip
                         formatter={(value) => {
                           if (typeof value !== 'number') return ''
-                          return formatFullCurrency(value)
+                          return yAxisFormatter(value)
                         }}
                         labelFormatter={(label) => `Domein ${label}`}
                       />

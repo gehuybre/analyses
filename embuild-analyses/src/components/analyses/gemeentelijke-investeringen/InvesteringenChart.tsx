@@ -5,7 +5,6 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
   createAutoScaledFormatter,
   createYAxisLabel,
-  formatCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
 
@@ -51,7 +50,7 @@ export function InvesteringenChart({ data, selectedMetric }: InvesteringenChartP
             tickFormatter={yAxisFormatter}
           />
           <Tooltip
-            formatter={(value: number | undefined) => value !== undefined ? [formatCurrency(value), 'Investering'] : ['', '']}
+            formatter={(value: number | undefined) => value !== undefined ? [yAxisFormatter(value), 'Investering'] : ['', '']}
             labelFormatter={(label) => `Jaar: ${label}`}
           />
           <Line

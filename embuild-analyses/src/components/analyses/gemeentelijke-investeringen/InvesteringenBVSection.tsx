@@ -21,7 +21,7 @@ import { SimpleGeoContext } from "../shared/GeoContext"
 import { ExportButtons } from "../shared/ExportButtons"
 import { HierarchicalFilter } from "../shared/HierarchicalFilter"
 import { getMunicipalityName } from "./nisUtils"
-import { stripPrefix } from "./labelUtils"
+import { normalizeBvDomainLabel, stripPrefix } from "./labelUtils"
 import {
   createAutoScaledFormatter,
   createYAxisLabel,
@@ -188,16 +188,17 @@ export function InvesteringenBVSection() {
   // Get available options based on selections (with prefixes stripped)
   const domainOptions = useMemo(() => {
     if (!lookups) return []
-    return lookups.domains.map(d => stripPrefix(d.BV_domein)).sort()
+    return Array.from(new Set(lookups.domains.map(d => normalizeBvDomainLabel(d.BV_domein)))).sort()
   }, [lookups])
 
   // Get subdomains for the selected domain
   const selectedDomainSubdomains = useMemo(() => {
     if (!lookups || !selectedDomain) return []
-    return lookups.subdomeins
-      .filter(s => stripPrefix(s.BV_domein) === selectedDomain)
+    const labels = lookups.subdomeins
+      .filter(s => normalizeBvDomainLabel(s.BV_domein) === selectedDomain)
       .map(s => stripPrefix(s.BV_subdomein))
       .sort()
+    return Array.from(new Set(labels))
   }, [lookups, selectedDomain])
 
   // Filter data based on BV selections (without geo filter)
@@ -206,7 +207,7 @@ export function InvesteringenBVSection() {
     let data = muniData
 
     if (selectedDomain) {
-      data = data.filter(d => stripPrefix(d.BV_domein) === selectedDomain)
+      data = data.filter(d => normalizeBvDomainLabel(d.BV_domein) === selectedDomain)
     }
 
     return data
@@ -436,7 +437,7 @@ export function InvesteringenBVSection() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Investeringen per beleidsdomein (BV)</CardTitle>
+            <CardTitle>Investeringen per beleidsdomein</CardTitle>
             <div className="flex items-center gap-4">
               {loadedChunks < totalChunks && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
@@ -530,7 +531,7 @@ export function InvesteringenBVSection() {
                         <Tooltip
                           formatter={(value) => {
                             if (typeof value !== 'number') return ''
-                            return selectedMetric === 'Totaal' ? formatFullCurrency(value) : `€ ${value.toFixed(2)}`
+                            return yAxisFormatter(value)
                           }}
                           labelFormatter={(label) => `Rapportjaar ${label}`}
                         />

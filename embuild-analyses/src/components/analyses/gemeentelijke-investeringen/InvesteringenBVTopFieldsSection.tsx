@@ -502,7 +502,7 @@ export function InvesteringenBVTopFieldsSection({
                         <Tooltip
                           formatter={(value) => {
                             if (typeof value !== 'number') return ''
-                            return selectedMetric === 'Totaal' ? formatFullCurrency(value) : `€ ${value.toFixed(2)}`
+                            return yAxisFormatter(value)
                           }}
                           labelFormatter={(label) => `Rapportjaar ${label}`}
                         />

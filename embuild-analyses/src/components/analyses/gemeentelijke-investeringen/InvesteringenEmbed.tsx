@@ -18,7 +18,7 @@ import { SimpleGeoFilter } from "./SimpleGeoFilter"
 import { SimpleGeoContext } from "../shared/GeoContext"
 import { HierarchicalFilter } from "../shared/HierarchicalFilter"
 import { getMunicipalityName } from "./nisUtils"
-import { stripPrefix } from "./labelUtils"
+import { normalizeBvDomainLabel, stripPrefix } from "./labelUtils"
 import {
   createAutoScaledFormatter,
   createYAxisLabel,
@@ -409,13 +409,13 @@ export function InvesteringenEmbed({
   // BV filtering logic
   const bvDomainOptions = useMemo(() => {
     if (!bvLookups) return []
-    return bvLookups.domains.map(d => stripPrefix(d.BV_domein)).sort()
+    return Array.from(new Set(bvLookups.domains.map(d => normalizeBvDomainLabel(d.BV_domein)))).sort()
   }, [bvLookups])
 
   const selectedDomainSubdomains = useMemo(() => {
     if (!bvLookups || !selectedDomain) return []
     const labels = bvLookups.subdomeins
-      .filter((s) => stripPrefix(s.BV_domein) === selectedDomain)
+      .filter((s) => normalizeBvDomainLabel(s.BV_domein) === selectedDomain)
       .map((s) => stripPrefix(s.BV_subdomein))
       .sort()
     return Array.from(new Set(labels))
@@ -445,7 +445,7 @@ export function InvesteringenEmbed({
     let data = bvMuniData
 
     if (selectedDomain) {
-      data = data.filter(d => stripPrefix(d.BV_domein) === selectedDomain)
+      data = data.filter(d => normalizeBvDomainLabel(d.BV_domein) === selectedDomain)
     }
 
     return data
@@ -680,7 +680,7 @@ export function InvesteringenEmbed({
       <Card>
         <CardHeader>
           <CardTitle>
-            {perspective === "bv" ? "Investeringen per beleidsdomein (BV)" : "Investeringen per economische rekening (REK)"}
+            {perspective === "bv" ? "Investeringen per beleidsdomein" : "Investeringen per economische rekening (REK)"}
           </CardTitle>
           {loadedChunks < totalChunks && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
@@ -784,7 +784,7 @@ export function InvesteringenEmbed({
                         <Tooltip
                           formatter={(value) => {
                             if (typeof value !== 'number') return ''
-                            return selectedMetric === 'Totaal' ? formatFullCurrency(value) : `€ ${value.toFixed(2)}`
+                            return yAxisFormatter(value)
                           }}
                           labelFormatter={(label) => `Rapportjaar ${label}`}
                         />

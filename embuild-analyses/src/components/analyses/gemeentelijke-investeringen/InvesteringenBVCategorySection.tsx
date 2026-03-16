@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { ExportButtons } from "../shared/ExportButtons"
 import { formatCurrency } from "@/lib/number-formatters"
 import { getMunicipalityName } from "./nisUtils"
-import { stripPrefix } from "./labelUtils"
+import { normalizeBvDomainLabel, stripPrefix } from "./labelUtils"
 import { getPublicPath } from "@/lib/path-utils"
 import { SimpleGeoFilter } from "./SimpleGeoFilter"
 import { SimpleGeoContext } from "../shared/GeoContext"
@@ -170,7 +170,7 @@ export function InvesteringenBVCategorySection() {
     const byDomain: Record<string, { label: string; value: number; count: number; subdomainSet: Set<string> }> = {}
 
     filteredData.forEach(record => {
-      const domain = stripPrefix(record.BV_domein)
+      const domain = normalizeBvDomainLabel(record.BV_domein)
       const subdomain = stripPrefix(record.BV_subdomein)
 
       if (!byDomain[domain]) {
@@ -221,7 +221,7 @@ export function InvesteringenBVCategorySection() {
       // Aggregate by BV_domein
       const byDomain: Record<string, { value: number; count: number }> = {}
       filteredData.forEach(record => {
-        const domain = stripPrefix(record.BV_domein)
+        const domain = normalizeBvDomainLabel(record.BV_domein)
         if (!byDomain[domain]) {
           byDomain[domain] = { value: 0, count: 0 }
         }
