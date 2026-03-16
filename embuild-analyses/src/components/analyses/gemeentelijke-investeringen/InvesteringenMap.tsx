@@ -74,8 +74,8 @@ export function InvesteringenMap({ data, selectedMetric, title }: InvesteringenM
         getGeoName={(code) => nameLookup.get(code) || null}
         formatValue={formatCurrency}
         tooltipLabel={valueLabel}
-        colorScheme="blue"
-        showProvinceBoundaries={true}
+        colorScheme="orange"
+        showProvinceBoundaries={false}
       />
     </div>
   )

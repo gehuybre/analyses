@@ -583,7 +583,7 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
       return (
         <InvesteringenEmbed
           section={section as "investments-bv" | "investments-rek"}
-          viewType={toChartOrTableViewType(urlParams.view)}
+          viewType={urlParams.view}
           metric={urlParams.metric}
           municipality={urlParams.municipality}
           domain={urlParams.domain}

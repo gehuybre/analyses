@@ -25,8 +25,9 @@ import {
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { getPublicPath } from "@/lib/path-utils"
-import { normalizeNisCode } from "@/lib/nis-fusion-utils"
+import { getConstituents, getFusionInfo, normalizeNisCode } from "@/lib/nis-fusion-utils"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
+import { InvesteringenMap } from "./InvesteringenMap"
 
 interface BVLookups {
   domains: Array<{ BV_domein: string }>
@@ -83,7 +84,7 @@ interface REKVlaanderenRecord {
   Per_inwoner: number
 }
 
-type ViewType = "chart" | "table"
+type ViewType = "chart" | "table" | "map"
 type Perspective = "bv" | "rek"
 
 interface InvesteringenEmbedProps {
@@ -298,11 +299,6 @@ export function InvesteringenEmbed({
           setTotalChunks(meta.bv_chunks)
           setIsLoading(false)
 
-          // Set a domain default only when no explicit value is active
-          if (lookupsData.domains.length > 0) {
-            setSelectedDomain((prev) => prev || stripPrefix(lookupsData.domains[0].BV_domein))
-          }
-
           // Load chunks in parallel
           const chunkPromises = Array.from({ length: meta.bv_chunks }, (_, i) =>
             fetch(getPublicPath(`/data/gemeentelijke-investeringen/bv_municipality_data_chunk_${i}.json`))
@@ -460,7 +456,15 @@ export function InvesteringenEmbed({
     let data = bvDataWithoutGeoFilter
 
     if (geoSelection.type === 'municipality' && geoSelection.code) {
-      data = data.filter(d => d.NIS_code === geoSelection.code)
+      const constituents = getConstituents(geoSelection.code)
+      const codesToMatch = constituents.length > 0
+        ? [geoSelection.code, ...constituents]
+        : [geoSelection.code]
+
+      data = data.filter(d => {
+        const normalizedCode = normalizeNisCode(d.NIS_code) || d.NIS_code
+        return codesToMatch.includes(normalizedCode) || codesToMatch.includes(d.NIS_code)
+      })
     }
 
     return data
@@ -485,7 +489,15 @@ export function InvesteringenEmbed({
     let data = rekDataWithoutGeoFilter
 
     if (geoSelection.type === 'municipality' && geoSelection.code) {
-      data = data.filter(d => d.NIS_code === geoSelection.code)
+      const constituents = getConstituents(geoSelection.code)
+      const codesToMatch = constituents.length > 0
+        ? [geoSelection.code, ...constituents]
+        : [geoSelection.code]
+
+      data = data.filter(d => {
+        const normalizedCode = normalizeNisCode(d.NIS_code) || d.NIS_code
+        return codesToMatch.includes(normalizedCode) || codesToMatch.includes(d.NIS_code)
+      })
     }
 
     return data
@@ -549,7 +561,7 @@ export function InvesteringenEmbed({
     }
 
     return Object.values(byYear).sort((a, b) => a.Rapportjaar - b.Rapportjaar)
-  }, [filteredData, selectedMetric, geoSelection])
+  }, [dataWithoutGeoFilter, filteredData, selectedMetric, geoSelection])
 
   // Auto-scale formatter for Y-axis
   const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel } = useMemo(() => {
@@ -576,27 +588,57 @@ export function InvesteringenEmbed({
     filteredData.forEach(record => {
       if (record.Rapportjaar !== latestYear) return
 
-      if (!byMuni[record.NIS_code]) {
-        byMuni[record.NIS_code] = {
-          municipality: getMunicipalityName(record.NIS_code, municipalityLookup),
+      const normalizedCode = normalizeNisCode(record.NIS_code) || record.NIS_code
+
+      if (!byMuni[normalizedCode]) {
+        const fusion = getFusionInfo(normalizedCode)
+        byMuni[normalizedCode] = {
+          municipality: fusion ? fusion.newName : getMunicipalityName(normalizedCode, municipalityLookup),
           total: 0,
           count: 0
         }
       }
-      byMuni[record.NIS_code].total += record[selectedMetric]
-      byMuni[record.NIS_code].count += 1
+      byMuni[normalizedCode].total += record[selectedMetric]
+      byMuni[normalizedCode].count += 1
     })
 
     return Object.values(byMuni)
       .sort((a, b) => b.total - a.total)
       .slice(0, 50)
-  }, [filteredData, selectedMetric, latestYear])
+  }, [filteredData, selectedMetric, latestYear, municipalityLookup])
+
+  const mapData = useMemo(() => {
+    const byMuni: Record<string, { municipalityCode: string; municipalityName: string; value: number }> = {}
+
+    filteredData.forEach(record => {
+      if (record.Rapportjaar !== latestYear) return
+
+      const normalizedCode = normalizeNisCode(record.NIS_code) || record.NIS_code
+
+      if (!byMuni[normalizedCode]) {
+        const fusion = getFusionInfo(normalizedCode)
+        byMuni[normalizedCode] = {
+          municipalityCode: normalizedCode,
+          municipalityName: fusion ? fusion.newName : getMunicipalityName(normalizedCode, municipalityLookup),
+          value: 0,
+        }
+      }
+
+      byMuni[normalizedCode].value += record[selectedMetric]
+    })
+
+    return Object.values(byMuni)
+  }, [filteredData, latestYear, municipalityLookup, selectedMetric])
 
   // Get available municipalities from the filtered data (without geo filter)
   // This ensures the municipality dropdown shows all municipalities with data for the selected category
   const availableMunicipalities = useMemo(() => {
-    const nisCodesSet = new Set(dataWithoutGeoFilter.map(d => d.NIS_code))
-    return Array.from(nisCodesSet)
+    const normalizedSet = new Set<string>()
+    dataWithoutGeoFilter.forEach((d) => {
+      const code = normalizeNisCode(d.NIS_code) || d.NIS_code
+      normalizedSet.add(code)
+    })
+    return Array.from(normalizedSet)
   }, [dataWithoutGeoFilter])
 
   const handleRetry = () => {
@@ -720,6 +762,7 @@ export function InvesteringenEmbed({
               <TabsList>
                 <TabsTrigger value="chart">Grafiek</TabsTrigger>
                 <TabsTrigger value="table">Tabel</TabsTrigger>
+                <TabsTrigger value="map">Kaart</TabsTrigger>
               </TabsList>
 
               <TabsContent value="chart" className="mt-4">
@@ -796,6 +839,20 @@ export function InvesteringenEmbed({
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
                   Top 50 gemeenten (rapportjaar {latestYear})
+                </p>
+              </TabsContent>
+
+              <TabsContent value="map" className="mt-4">
+                <InvesteringenMap
+                  data={mapData.map((d) => ({
+                    value: d.value,
+                    municipality: d.municipalityName,
+                    nis_code: d.municipalityCode,
+                  }))}
+                  selectedMetric={selectedMetric === 'Totaal' ? 'total' : 'per_capita'}
+                />
+                <p className="text-sm text-muted-foreground mt-2">
+                  Rapportjaar {latestYear} - {selectedMetric === 'Totaal' ? 'Totale uitgave' : 'Uitgave per inwoner'}
                 </p>
               </TabsContent>
             </Tabs>

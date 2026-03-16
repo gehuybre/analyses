@@ -459,6 +459,11 @@ export function MunicipalityMap<TData extends UnknownRecord = UnknownRecord>({
     [periods]
   )
 
+  const municipalityStrokeColor = "#475569"
+  const municipalityStrokeWidth = 0.35 / zoom
+  const provinceStrokeColor = "rgba(71, 85, 105, 0.28)"
+  const provinceStrokeWidth = 0.75 / zoom
+
   // Loading state
   if (loading) {
     return (
@@ -602,27 +607,27 @@ export function MunicipalityMap<TData extends UnknownRecord = UnknownRecord>({
                       style={{
                         default: {
                           fill,
-                          // If hidden, no stroke. If visible, dark stroke for clear definition
-                          stroke: shouldHide ? "transparent" : "#333333",
-                          strokeWidth: shouldHide ? 0 : 0.3 / zoom, // Thinner, sharper dark border
+                          stroke: shouldHide ? "transparent" : municipalityStrokeColor,
+                          strokeWidth: shouldHide ? 0 : municipalityStrokeWidth,
                           outline: "none",
                           cursor: shouldHide ? "default" : (onSelectMunicipality ? "pointer" : "default"),
                           transition: "fill 300ms ease-in-out",
+                          vectorEffect: "non-scaling-stroke",
                         },
                         hover: {
-                          // On hover, darken slightly if it has data or is empty (but visible)
                           fill: shouldHide ? "transparent" : (value === undefined || !colorScale ? "#e5e7eb" : fill),
-                          stroke: shouldHide ? "transparent" : "#111827", // Almost black on hover
-                          strokeWidth: shouldHide ? 0 : 0.6 / zoom,
+                          stroke: shouldHide ? "transparent" : municipalityStrokeColor,
+                          strokeWidth: shouldHide ? 0 : municipalityStrokeWidth,
                           outline: "none",
-                          // Opacity effect on hover for data-filled regions
                           opacity: shouldHide || value === undefined ? 1 : 0.9,
+                          vectorEffect: "non-scaling-stroke",
                         },
                         pressed: {
                           fill,
-                          stroke: shouldHide ? "transparent" : "#111827",
-                          strokeWidth: shouldHide ? 0 : 0.6 / zoom,
+                          stroke: shouldHide ? "transparent" : municipalityStrokeColor,
+                          strokeWidth: shouldHide ? 0 : municipalityStrokeWidth,
                           outline: "none",
+                          vectorEffect: "non-scaling-stroke",
                         },
                       }}
                       className={cn(isActive ? "drop-shadow-md" : "")}
@@ -644,24 +649,27 @@ export function MunicipalityMap<TData extends UnknownRecord = UnknownRecord>({
                       style={{
                         default: {
                           fill: "none",
-                          stroke: "#374151",
-                          strokeWidth: 1.5 / zoom,
+                          stroke: provinceStrokeColor,
+                          strokeWidth: provinceStrokeWidth,
                           outline: "none",
                           pointerEvents: "none",
+                          vectorEffect: "non-scaling-stroke",
                         },
                         hover: {
                           fill: "none",
-                          stroke: "#374151",
-                          strokeWidth: 1.5 / zoom,
+                          stroke: provinceStrokeColor,
+                          strokeWidth: provinceStrokeWidth,
                           outline: "none",
                           pointerEvents: "none",
+                          vectorEffect: "non-scaling-stroke",
                         },
                         pressed: {
                           fill: "none",
-                          stroke: "#374151",
-                          strokeWidth: 1.5 / zoom,
+                          stroke: provinceStrokeColor,
+                          strokeWidth: provinceStrokeWidth,
                           outline: "none",
                           pointerEvents: "none",
+                          vectorEffect: "non-scaling-stroke",
                         },
                       }}
                       aria-hidden="true"
