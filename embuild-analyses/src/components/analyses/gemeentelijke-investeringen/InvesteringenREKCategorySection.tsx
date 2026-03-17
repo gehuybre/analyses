@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState, useEffect, useContext } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from 'lucide-react'
@@ -9,9 +9,9 @@ import { ExportButtons } from "../shared/ExportButtons"
 import { formatCurrency } from "@/lib/number-formatters"
 import { getMunicipalityName } from "./nisUtils"
 import { stripPrefix } from "./labelUtils"
-import { getPublicPath } from "@/lib/path-utils"
 import { SimpleGeoFilter } from "./SimpleGeoFilter"
 import { SimpleGeoContext } from "../shared/GeoContext"
+import { fetchInvesteringenJson } from "@/lib/investeringen-data"
 
 interface REKLookups {
   niveau3s: Array<{ Niveau_3: string }>
@@ -57,19 +57,6 @@ function validateChunkData(data: unknown): REKRecord[] {
   return data as REKRecord[]
 }
 
-function validateMetadata(data: unknown): { bv_chunks: number; rek_chunks: number } {
-  if (!data || typeof data !== 'object') {
-    throw new Error('Invalid metadata: expected object')
-  }
-  const obj = data as Record<string, unknown>
-  if (typeof obj.bv_chunks !== 'number' || typeof obj.rek_chunks !== 'number') {
-    throw new Error('Invalid metadata: missing or invalid chunk counts')
-  }
-  return obj as { bv_chunks: number; rek_chunks: number }
-}
-
-
-
 export function InvesteringenREKCategorySection() {
   const [lookups, setLookups] = useState<REKLookups | null>(null)
   const [muniData, setMuniData] = useState<REKRecord[]>([])
@@ -95,22 +82,16 @@ export function InvesteringenREKCategorySection() {
         setMuniData([])
         setLoadedChunks(0)
 
-        const [metaRes, lookupsRes] = await Promise.all([
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/metadata.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/rek_lookups.json')),
+        const [meta, lookupsData] = await Promise.all([
+          fetchInvesteringenJson<{ rek_chunks: number; bv_chunks: number }>(
+            '/data/gemeentelijke-investeringen/metadata.json'
+          ),
+          fetchInvesteringenJson<REKLookups>('/data/gemeentelijke-investeringen/rek_lookups.json'),
         ])
 
         if (cancelled) return
 
-        if (!metaRes.ok) throw new Error(`Failed to load metadata: ${metaRes.statusText}`)
-        if (!lookupsRes.ok) throw new Error(`Failed to load lookups: ${lookupsRes.statusText}`)
-
-        const meta = validateMetadata(await metaRes.json())
-        const lookupsData = validateLookups(await lookupsRes.json())
-
-        if (cancelled) return
-
-        setLookups(lookupsData)
+        setLookups(validateLookups(lookupsData))
         setTotalChunks(meta.rek_chunks)
         setIsLoading(false)
 
@@ -119,11 +100,11 @@ export function InvesteringenREKCategorySection() {
         for (let i = 0; i < meta.rek_chunks; i++) {
           if (cancelled) return
 
-          const chunkRes = await fetch(getPublicPath(`/data/gemeentelijke-investeringen/rek_municipality_data_chunk_${i}.json`))
-          if (!chunkRes.ok) {
-            throw new Error(`Failed to load chunk ${i}: ${chunkRes.statusText}`)
-          }
-          const chunkData = validateChunkData(await chunkRes.json())
+          const chunkData = validateChunkData(
+            await fetchInvesteringenJson<REKRecord[]>(
+              `/data/gemeentelijke-investeringen/rek_municipality_data_chunk_${i}.json`
+            )
+          )
           allChunks.push(...chunkData)
           setMuniData([...allChunks])
           setLoadedChunks(i + 1)

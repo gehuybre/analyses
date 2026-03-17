@@ -22,7 +22,7 @@ import {
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
-import { getPublicPath } from "@/lib/path-utils"
+import { fetchInvesteringenJson } from "@/lib/investeringen-data"
 import { stripPrefix } from "./labelUtils"
 import { ExportButtons } from "../shared/ExportButtons"
 
@@ -102,23 +102,15 @@ export function InvesteringenBVDifferenceSection({ viewType = "chart" }: Investe
 
     async function init() {
       try {
-        const [lookupsRes, vlaanderenRes] = await Promise.all([
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/bv_lookups.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/bv_vlaanderen_data.json'))
+        const [lookupsData, vlaanderen] = await Promise.all([
+          fetchInvesteringenJson<BVLookups>('/data/gemeentelijke-investeringen/bv_lookups.json'),
+          fetchInvesteringenJson<BVVlaanderenRecord[]>('/data/gemeentelijke-investeringen/bv_vlaanderen_data.json'),
         ])
 
         if (cancelled) return
 
-        if (!lookupsRes.ok) throw new Error(`Failed to load lookups: ${lookupsRes.statusText}`)
-        if (!vlaanderenRes.ok) throw new Error(`Failed to load Vlaanderen data: ${vlaanderenRes.statusText}`)
-
-        const lookupsData = validateLookups(await lookupsRes.json())
-        const vlaanderen = validateVlaanderenData(await vlaanderenRes.json())
-
-        if (cancelled) return
-
-        setLookups(lookupsData)
-        setVlaanderenData(vlaanderen)
+        setLookups(validateLookups(lookupsData))
+        setVlaanderenData(validateVlaanderenData(vlaanderen))
         setIsLoading(false)
       } catch (err) {
         if (!cancelled) {

@@ -45,6 +45,7 @@ class NumpyEncoder(json.JSONEncoder):
 def save_json(data, filename, chunk_size=None):
     """Save data as JSON with NaN handling and optional chunking."""
     output_path = RESULTS_DIR / filename
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Replace NaN values with None before saving
     def replace_nan(obj):
@@ -68,6 +69,7 @@ def save_json(data, filename, chunk_size=None):
         for i, chunk in enumerate(chunks):
             chunk_filename = f"{filename.replace('.json', '')}_chunk_{i}.json"
             chunk_path = RESULTS_DIR / chunk_filename
+            chunk_path.parent.mkdir(parents=True, exist_ok=True)
             with open(chunk_path, 'w', encoding='utf-8') as f:
                 json.dump(chunk, f, cls=NumpyEncoder, ensure_ascii=False)
         return len(chunks)
@@ -111,9 +113,10 @@ NEW_MUNI_NAMES = {
     "71072": "Hasselt"
 }
 
-def load_nis_lookups():
-    """Load NIS municipality lookups for Flanders only, with 2025 mergers."""
+def load_nis_lookups(allowed_codes=None):
+    """Load NIS municipality lookups for municipalities present in the dataset."""
     nis_df = pd.read_csv(NIS_FILE, encoding='utf-8')
+    allowed_codes_set = set(str(code) for code in allowed_codes) if allowed_codes is not None else None
     
     # Filter for current/recent Flemish municipalities
     # Flanders NIS codes start with 1, 2, 3, 4, or 7
@@ -147,6 +150,13 @@ def load_nis_lookups():
     # Inject new merger targets
     for code, name in NEW_MUNI_NAMES.items():
         nis_lookup[code] = name
+
+    if allowed_codes_set is not None:
+        nis_lookup = {
+            code: name
+            for code, name in nis_lookup.items()
+            if code in allowed_codes_set
+        }
 
     # Final sort
     return dict(sorted(nis_lookup.items(), key=lambda x: x[1]))
@@ -183,6 +193,12 @@ def aggregate_by_rapportjaar(df, group_cols, value_cols=['Totaal', 'Per_inwoner'
     grouped = df_filtered.groupby(['NIS_code', 'Rapportjaar'] + group_cols, dropna=False)[value_cols].sum().reset_index()
     return grouped
 
+def normalize_merged_nis_codes(df):
+    """Normalize municipality codes to post-2025 merger targets."""
+    normalized = df.copy()
+    normalized['NIS_code'] = normalized['NIS_code'].astype(str).replace(NIS_MERGERS_LOOKUP)
+    return normalized
+
 def prepare_bv_data():
     """Prepare BV (beleidsdomein) visualization data."""
     print("\n" + "="*60)
@@ -202,11 +218,13 @@ def prepare_bv_data():
     subdomeins = df_agg[['BV_domein', 'BV_subdomein']].drop_duplicates().sort_values(['BV_domein', 'BV_subdomein']).reset_index(drop=True)
     beleidsvelds = df_agg[['BV_subdomein', 'Beleidsveld']].drop_duplicates().sort_values(['BV_subdomein', 'Beleidsveld']).reset_index(drop=True)
 
+    normalized_codes = normalize_merged_nis_codes(df_agg)['NIS_code'].astype(str).unique().tolist()
+
     lookups = {
         'domains': domains.to_dict('records'),
         'subdomeins': subdomeins.to_dict('records'),
         'beleidsvelds': beleidsvelds.to_dict('records'),
-        'municipalities': load_nis_lookups(),
+        'municipalities': load_nis_lookups(normalized_codes),
     }
 
     print(f"Lookups: {len(domains)} domains, {len(subdomeins)} subdomeins, {len(beleidsvelds)} beleidsvelds")
@@ -214,13 +232,55 @@ def prepare_bv_data():
     # Municipality data (all records)
     muni_data = df_agg.to_dict('records')
 
+    # Domain-level municipality summary for lightweight client charts/maps/tables
+    domain_summary_df = (
+        normalize_merged_nis_codes(df_agg)
+        .groupby(['NIS_code', 'Rapportjaar', 'BV_domein'], dropna=False)[['Totaal', 'Per_inwoner']]
+        .sum()
+        .reset_index()
+        .sort_values(['NIS_code', 'Rapportjaar', 'BV_domein'])
+    )
+
+    domain_all_summary_df = (
+        domain_summary_df
+        .groupby(['Rapportjaar', 'BV_domein'], dropna=False)[['Totaal', 'Per_inwoner']]
+        .agg({'Totaal': 'sum', 'Per_inwoner': 'mean'})
+        .reset_index()
+    )
+
+    total_summary_df = (
+        domain_summary_df
+        .groupby(['NIS_code', 'Rapportjaar'], dropna=False)[['Totaal', 'Per_inwoner']]
+        .sum()
+        .reset_index()
+        .groupby(['Rapportjaar'], dropna=False)[['Totaal', 'Per_inwoner']]
+        .agg({'Totaal': 'sum', 'Per_inwoner': 'mean'})
+        .reset_index()
+    )
+    total_summary_df['BV_domein'] = '__all__'
+
+    domain_all_summary = (
+        pd.concat([domain_all_summary_df, total_summary_df], ignore_index=True)
+        .sort_values(['Rapportjaar', 'BV_domein'])
+        .to_dict('records')
+    )
+
+    domain_summary = domain_summary_df.to_dict('records')
+    domain_summary_by_municipality = {
+        nis_code: group.to_dict('records')
+        for nis_code, group in domain_summary_df.groupby('NIS_code', sort=True)
+    }
+
     # Vlaanderen totals (sum across all municipalities)
     vlaanderen_totals = df_agg.groupby(['Rapportjaar', 'BV_domein', 'BV_subdomein', 'Beleidsveld'], dropna=False)[['Totaal', 'Per_inwoner']].sum().reset_index()
     vlaanderen_data = vlaanderen_totals.to_dict('records')
 
     return {
         'lookups': lookups,
+        'domain_all_summary': domain_all_summary,
         'municipality_data': muni_data,
+        'domain_summary': domain_summary,
+        'domain_summary_by_municipality': domain_summary_by_municipality,
         'vlaanderen_data': vlaanderen_data,
     }
 
@@ -242,10 +302,12 @@ def prepare_rek_data():
     niveau3s = df_agg[['Niveau_3']].drop_duplicates().sort_values('Niveau_3').reset_index(drop=True)
     alg_rekenings = df_agg[['Niveau_3', 'Alg_rekening']].drop_duplicates().sort_values(['Niveau_3', 'Alg_rekening']).reset_index(drop=True)
 
+    normalized_codes = normalize_merged_nis_codes(df_agg)['NIS_code'].astype(str).unique().tolist()
+
     lookups = {
         'niveau3s': niveau3s.to_dict('records'),
         'alg_rekenings': alg_rekenings.to_dict('records'),
-        'municipalities': load_nis_lookups(),
+        'municipalities': load_nis_lookups(normalized_codes),
     }
 
     print(f"Lookups: {len(niveau3s)} niveau3s, {len(alg_rekenings)} alg_rekenings")
@@ -274,6 +336,10 @@ def main():
     save_json(bv_results['lookups'], RESULTS_INTERNAL_DIR / 'bv_lookups.json')
     
     bv_chunks = save_json(bv_results['municipality_data'], 'bv_municipality_data.json', chunk_size=chunk_size)
+    save_json(bv_results['domain_all_summary'], 'bv_domain_all_summary.json')
+    save_json(bv_results['domain_summary'], 'bv_domain_municipality_summary.json')
+    for nis_code, records in bv_results['domain_summary_by_municipality'].items():
+        save_json(records, Path('bv_domain_municipality') / f'{nis_code}.json')
     save_json(bv_results['vlaanderen_data'], 'bv_vlaanderen_data.json')
 
     # Prepare REK data

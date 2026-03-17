@@ -14,7 +14,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { MunicipalityMap } from "../shared/MunicipalityMap"
 import { InvesteringenMap } from "./InvesteringenMap"
 import { SimpleGeoFilter } from "./SimpleGeoFilter"
 import { SimpleGeoContext } from "../shared/GeoContext"
@@ -29,8 +28,7 @@ import {
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
-import { getPublicPath } from "@/lib/path-utils"
-import { normalizeNisCode, getFusionInfo, getConstituents } from "@/lib/nis-fusion-utils"
+import { fetchInvesteringenJson } from "@/lib/investeringen-data"
 
 interface BVLookups {
   domains: Array<{ BV_domein: string }>
@@ -39,39 +37,33 @@ interface BVLookups {
   municipalities: Record<string, string>
 }
 
-interface BVRecord {
+interface BVDomainMunicipalitySummaryRecord {
   NIS_code: string
   Rapportjaar: number
   BV_domein: string
-  BV_subdomein: string
-  Beleidsveld: string
   Totaal: number
   Per_inwoner: number
 }
 
-interface BVVlaanderenRecord {
+interface BVDomainAllSummaryRecord {
   Rapportjaar: number
   BV_domein: string
-  BV_subdomein: string
-  Beleidsveld: string
   Totaal: number
   Per_inwoner: number
 }
 
+interface SelectedMunicipalitySummaryState {
+  code: string
+  records: BVDomainMunicipalitySummaryRecord[]
+}
 
+type BVSectionViewType = 'chart' | 'table' | 'map'
 
-// Removed local formatters - using centralized formatters from @/lib/number-formatters
-
-// Runtime validation helpers
-function validateMetadata(data: unknown): { bv_chunks: number; rek_chunks: number } {
-  if (!data || typeof data !== 'object') {
-    throw new Error('Invalid metadata: expected object')
-  }
-  const obj = data as Record<string, unknown>
-  if (typeof obj.bv_chunks !== 'number' || typeof obj.rek_chunks !== 'number') {
-    throw new Error('Invalid metadata: missing or invalid chunk counts')
-  }
-  return obj as { bv_chunks: number; rek_chunks: number }
+interface InvesteringenBVSectionProps {
+  viewType?: BVSectionViewType
+  metric?: string | null
+  municipality?: string | null
+  domain?: string | null
 }
 
 function validateLookups(data: unknown): BVLookups {
@@ -92,88 +84,106 @@ function validateLookups(data: unknown): BVLookups {
   }
 }
 
-function validateVlaanderenData(data: unknown): BVVlaanderenRecord[] {
+function validateDomainSummaryData(data: unknown): BVDomainMunicipalitySummaryRecord[] {
   if (!Array.isArray(data)) {
-    throw new Error('Invalid Vlaanderen data: expected array')
+    throw new Error('Invalid BV domain summary: expected array')
   }
-  return data as BVVlaanderenRecord[]
+  return data as BVDomainMunicipalitySummaryRecord[]
 }
 
-function validateChunkData(data: unknown): BVRecord[] {
+function validateDomainAllSummaryData(data: unknown): BVDomainAllSummaryRecord[] {
   if (!Array.isArray(data)) {
-    throw new Error('Invalid chunk data: expected array')
+    throw new Error('Invalid BV aggregate summary: expected array')
   }
-  return data as BVRecord[]
+  return data as BVDomainAllSummaryRecord[]
 }
 
-export function InvesteringenBVSection() {
+async function loadMunicipalitySummary(nisCode: string): Promise<BVDomainMunicipalitySummaryRecord[]> {
+  try {
+    return validateDomainSummaryData(
+      await fetchInvesteringenJson<BVDomainMunicipalitySummaryRecord[]>(
+        `/data/gemeentelijke-investeringen/bv_domain_municipality/${nisCode}.json`
+      )
+    )
+  } catch (error) {
+    console.warn(`Falling back to BV full municipality summary for ${nisCode}:`, error)
+    return validateDomainSummaryData(
+      await fetchInvesteringenJson<BVDomainMunicipalitySummaryRecord[]>(
+        '/data/gemeentelijke-investeringen/bv_domain_municipality_summary.json'
+      )
+    ).filter((record) => record.NIS_code === nisCode)
+  }
+}
+
+export function InvesteringenBVSection({
+  viewType = 'chart',
+  metric = null,
+  municipality = null,
+  domain = null,
+}: InvesteringenBVSectionProps = {}) {
   const [lookups, setLookups] = useState<BVLookups | null>(null)
-  const [vlaanderenData, setVlaanderenData] = useState<BVVlaanderenRecord[]>([])
-  const [muniData, setMuniData] = useState<BVRecord[]>([])
+  const [aggregateSummary, setAggregateSummary] = useState<BVDomainAllSummaryRecord[]>([])
+  const [allMunicipalitySummary, setAllMunicipalitySummary] = useState<BVDomainMunicipalitySummaryRecord[] | null>(null)
+  const [selectedMunicipalitySummary, setSelectedMunicipalitySummary] = useState<SelectedMunicipalitySummaryState | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [loadedChunks, setLoadedChunks] = useState(0)
-  const [totalChunks, setTotalChunks] = useState(0)
+  const [isAllMunicipalityDetailLoading, setIsAllMunicipalityDetailLoading] = useState(false)
+  const [isSelectedMunicipalityLoading, setIsSelectedMunicipalityLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [selectedDomain, setSelectedDomain] = useState<string>('')
   const [selectedMetric, setSelectedMetric] = useState<'Totaal' | 'Per_inwoner'>('Totaal')
-  const [currentView, setCurrentView] = useState<'chart' | 'table' | 'map'>('chart')
+  const [currentView, setCurrentView] = useState<BVSectionViewType>(viewType)
   const [geoSelection, setGeoSelection] = useState<{
     type: 'all' | 'region' | 'province' | 'arrondissement' | 'municipality'
     code?: string
   }>({ type: 'all' })
 
-  // Load initial data and start chunk loading
+  useEffect(() => {
+    setCurrentView(viewType)
+  }, [viewType])
+
+  useEffect(() => {
+    if (metric === 'per_capita') {
+      setSelectedMetric('Per_inwoner')
+    } else if (metric === 'total') {
+      setSelectedMetric('Totaal')
+    }
+  }, [metric])
+
+  useEffect(() => {
+    if (municipality) {
+      setGeoSelection({ type: 'municipality', code: municipality })
+    } else {
+      setGeoSelection({ type: 'all' })
+    }
+  }, [municipality])
+
+  useEffect(() => {
+    if (domain !== null) {
+      setSelectedDomain(domain)
+    }
+  }, [domain])
+
   useEffect(() => {
     let cancelled = false
 
     async function init() {
       try {
-        // Reset data to prevent double-loading on remount
-        setMuniData([])
-        setLoadedChunks(0)
-
-        const [metaRes, lookupsRes, vlaanderenRes] = await Promise.all([
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/metadata.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/bv_lookups.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/bv_vlaanderen_data.json'))
+        const [lookupsData, aggregateSummaryData] = await Promise.all([
+          fetchInvesteringenJson<BVLookups>('/data/gemeentelijke-investeringen/bv_lookups.json'),
+          fetchInvesteringenJson<BVDomainAllSummaryRecord[]>(
+            '/data/gemeentelijke-investeringen/bv_domain_all_summary.json'
+          ),
         ])
 
         if (cancelled) return
 
-        if (!metaRes.ok) throw new Error(`Failed to load metadata: ${metaRes.statusText}`)
-        if (!lookupsRes.ok) throw new Error(`Failed to load lookups: ${lookupsRes.statusText}`)
-        if (!vlaanderenRes.ok) throw new Error(`Failed to load Vlaanderen data: ${vlaanderenRes.statusText}`)
-
-        const meta = validateMetadata(await metaRes.json())
-        const lookupsData = validateLookups(await lookupsRes.json())
-        const vlaanderen = validateVlaanderenData(await vlaanderenRes.json())
-
-        if (cancelled) return
-
-        setLookups(lookupsData)
-        setVlaanderenData(vlaanderen)
-        setTotalChunks(meta.bv_chunks)
-
+        setLookups(validateLookups(lookupsData))
+        setAggregateSummary(validateDomainAllSummaryData(aggregateSummaryData))
         setIsLoading(false)
-
-        // Load chunks sequentially
-        const allChunks: BVRecord[] = []
-        for (let i = 0; i < meta.bv_chunks; i++) {
-          if (cancelled) return
-
-          const chunkRes = await fetch(getPublicPath(`/data/gemeentelijke-investeringen/bv_municipality_data_chunk_${i}.json`))
-          if (!chunkRes.ok) {
-            throw new Error(`Failed to load chunk ${i}: ${chunkRes.statusText}`)
-          }
-          const chunkData = validateChunkData(await chunkRes.json())
-          allChunks.push(...chunkData)
-          setMuniData([...allChunks])
-          setLoadedChunks(i + 1)
-        }
       } catch (err) {
         if (!cancelled) {
-          console.error('Failed to load BV data:', err)
+          console.error('Failed to load BV aggregate summary:', err)
           setError(err instanceof Error ? err.message : 'Fout bij het laden van de data')
           setIsLoading(false)
         }
@@ -185,6 +195,70 @@ export function InvesteringenBVSection() {
       cancelled = true
     }
   }, [])
+
+  const needsAllMunicipalityDetail = currentView !== 'chart'
+
+  useEffect(() => {
+    if (!needsAllMunicipalityDetail || allMunicipalitySummary !== null) {
+      return
+    }
+
+    let cancelled = false
+    setIsAllMunicipalityDetailLoading(true)
+
+    fetchInvesteringenJson<BVDomainMunicipalitySummaryRecord[]>(
+      '/data/gemeentelijke-investeringen/bv_domain_municipality_summary.json'
+    )
+      .then((data) => {
+        if (cancelled) return
+        setAllMunicipalitySummary(validateDomainSummaryData(data))
+        setIsAllMunicipalityDetailLoading(false)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Failed to load BV municipality summary:', err)
+          setError(err instanceof Error ? err.message : 'Fout bij het laden van de data')
+          setIsAllMunicipalityDetailLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [needsAllMunicipalityDetail, allMunicipalitySummary])
+
+  useEffect(() => {
+    if (geoSelection.type !== 'municipality' || !geoSelection.code || allMunicipalitySummary !== null) {
+      return
+    }
+    if (selectedMunicipalitySummary?.code === geoSelection.code) {
+      return
+    }
+
+    let cancelled = false
+    setIsSelectedMunicipalityLoading(true)
+
+    loadMunicipalitySummary(geoSelection.code)
+      .then((data) => {
+        if (cancelled) return
+        setSelectedMunicipalitySummary({
+          code: geoSelection.code!,
+          records: validateDomainSummaryData(data),
+        })
+        setIsSelectedMunicipalityLoading(false)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Failed to load BV municipality detail:', err)
+          setError(err instanceof Error ? err.message : 'Fout bij het laden van de data')
+          setIsSelectedMunicipalityLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [allMunicipalitySummary, geoSelection, selectedMunicipalitySummary])
 
   // Get available options based on selections (with prefixes stripped)
   const domainOptions = useMemo(() => {
@@ -205,100 +279,74 @@ export function InvesteringenBVSection() {
   // Filter data based on BV selections (without geo filter)
   // Match by stripped labels since user sees stripped versions
   const dataWithoutGeoFilter = useMemo(() => {
-    let data = muniData
+    let data = allMunicipalitySummary ?? []
 
     if (selectedDomain) {
       data = data.filter(d => normalizeBvDomainLabel(d.BV_domein) === selectedDomain)
     }
 
     return data
-  }, [muniData, selectedDomain])
+  }, [allMunicipalitySummary, selectedDomain])
 
   // Filter data based on selections (including geo filter)
   const filteredData = useMemo(() => {
-    let data = dataWithoutGeoFilter
-
-    // Apply geo filter
-    if (geoSelection.type === 'municipality' && geoSelection.code) {
-      // Get constituent codes if this is a merged municipality
-      const constituents = getConstituents(geoSelection.code)
-
-      // Build list of codes to match (new code + all old constituent codes)
-      const codesToMatch = constituents.length > 0
-        ? [geoSelection.code, ...constituents]
-        : [geoSelection.code]
-
-      data = data.filter(d => {
-        // Normalize the record's code
-        const normalizedCode = normalizeNisCode(d.NIS_code) || d.NIS_code
-
-        // Match if either the normalized code OR the original code is in our list
-        return codesToMatch.includes(normalizedCode) || codesToMatch.includes(d.NIS_code)
-      })
+    if (geoSelection.type !== 'municipality' || !geoSelection.code) {
+      return dataWithoutGeoFilter
     }
 
-    return data
+    return dataWithoutGeoFilter.filter((record) => record.NIS_code === geoSelection.code)
   }, [dataWithoutGeoFilter, geoSelection])
+
+  const selectedMunicipalityChartData = useMemo(() => {
+    if (geoSelection.type !== 'municipality' || !geoSelection.code) {
+      return []
+    }
+
+    const sourceData = allMunicipalitySummary !== null
+      ? allMunicipalitySummary.filter((record) => record.NIS_code === geoSelection.code)
+      : selectedMunicipalitySummary?.code === geoSelection.code
+        ? selectedMunicipalitySummary.records
+        : []
+
+    if (!selectedDomain) {
+      return sourceData
+    }
+
+    return sourceData.filter((record) => normalizeBvDomainLabel(record.BV_domein) === selectedDomain)
+  }, [allMunicipalitySummary, geoSelection, selectedDomain, selectedMunicipalitySummary])
 
   // Chart data: Vlaanderen totals or municipality average
   const chartData = useMemo(() => {
-    const byYear: Record<number, { Rapportjaar: number; value: number }> = {}
-
     if (geoSelection.type === 'all') {
-      // For "all" view with filters, aggregate per municipality first to avoid double counting.
-      // Why: A single municipality can have multiple records (one per domain/subdomein/beleidsveld).
-      // If we sum directly, we'd count municipality data multiple times per year.
-      // Instead, we first aggregate per municipality+year, then sum across municipalities.
-      const perMuniYear: Record<string, number> = {}
-
-      dataWithoutGeoFilter.forEach(record => {
-        const normalizedCode = normalizeNisCode(record.NIS_code) || record.NIS_code
-        const key = `${normalizedCode}_${record.Rapportjaar}`
-        perMuniYear[key] = (perMuniYear[key] || 0) + record[selectedMetric]
-      })
-
-      // Then aggregate across municipalities
-      Object.entries(perMuniYear).forEach(([key, value]) => {
-        const year = parseInt(key.split('_')[1])
-        if (!byYear[year]) {
-          byYear[year] = { Rapportjaar: year, value: 0 }
-        }
-        byYear[year].value += value
-      })
-
-      // For Per_inwoner metric, calculate average across municipalities (not sum)
-      // Why: Per_inwoner values are already normalized per municipality population.
-      // Summing them would be meaningless - we need the average to show typical spending.
-      if (selectedMetric === 'Per_inwoner') {
-        const municipalityCounts: Record<number, Set<string>> = {}
-        dataWithoutGeoFilter.forEach(record => {
-          if (!municipalityCounts[record.Rapportjaar]) {
-            municipalityCounts[record.Rapportjaar] = new Set()
-          }
-          const normalizedCode = normalizeNisCode(record.NIS_code) || record.NIS_code
-          municipalityCounts[record.Rapportjaar].add(normalizedCode)
-        })
-        Object.keys(byYear).forEach(year => {
-          const y = parseInt(year)
-          const count = municipalityCounts[y]?.size || 0
-          if (count > 0) {
-            byYear[y].value = byYear[y].value / count
-          }
-        })
-      }
-    } else {
-      // For specific region/province/municipality selection, sum all matching records.
-      // This is safe because filteredData already contains only records for that selection.
-      filteredData.forEach(record => {
-        if (!byYear[record.Rapportjaar]) {
-          byYear[record.Rapportjaar] = { Rapportjaar: record.Rapportjaar, value: 0 }
-        }
-        byYear[record.Rapportjaar].value += record[selectedMetric]
-      })
+      const summaryDomain = selectedDomain || '__all__'
+      return aggregateSummary
+        .filter((record) => (
+          summaryDomain === '__all__'
+            ? record.BV_domein === '__all__'
+            : normalizeBvDomainLabel(record.BV_domein) === summaryDomain
+        ))
+        .map((record) => ({
+          Rapportjaar: record.Rapportjaar,
+          value: record[selectedMetric],
+        }))
+        .sort((a, b) => a.Rapportjaar - b.Rapportjaar)
     }
 
+    if (selectedMunicipalityChartData.length === 0) {
+      return []
+    }
+
+    const byYear: Record<number, { Rapportjaar: number; value: number }> = {}
+
+    selectedMunicipalityChartData.forEach(record => {
+      if (!byYear[record.Rapportjaar]) {
+        byYear[record.Rapportjaar] = { Rapportjaar: record.Rapportjaar, value: 0 }
+      }
+      byYear[record.Rapportjaar].value += record[selectedMetric]
+    })
+
     return Object.values(byYear).sort((a, b) => a.Rapportjaar - b.Rapportjaar)
-  }, [filteredData, selectedMetric, geoSelection])
+  }, [aggregateSummary, geoSelection, selectedDomain, selectedMetric, selectedMunicipalityChartData])
 
   // Auto-scale formatter for Y-axis to prevent label overflow
   const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel, scaleUnit: yAxisScaleUnit } = useMemo(() => {
@@ -314,6 +362,10 @@ export function InvesteringenBVSection() {
 
   // Table data: By municipality with context window for selected municipality
   const tableData = useMemo(() => {
+    if (allMunicipalitySummary === null) {
+      return []
+    }
+
     const byMuni: Record<string, { municipality: string; total: number; count: number; nisCode: string }> = {}
 
     // Use dataWithoutGeoFilter to get all municipalities for ranking
@@ -321,22 +373,16 @@ export function InvesteringenBVSection() {
       // Show latest year for table
       if (record.Rapportjaar !== 2026) return
 
-      const normalizedCode = normalizeNisCode(record.NIS_code) || record.NIS_code
-
-      if (!byMuni[normalizedCode]) {
-        // Use fusion info for name if available
-        const fusion = getFusionInfo(normalizedCode)
-        const name = fusion ? fusion.newName : getMunicipalityName(normalizedCode, lookups?.municipalities)
-
-        byMuni[normalizedCode] = {
-          municipality: name,
+      if (!byMuni[record.NIS_code]) {
+        byMuni[record.NIS_code] = {
+          municipality: getMunicipalityName(record.NIS_code, lookups?.municipalities),
           total: 0,
           count: 0,
-          nisCode: normalizedCode
+          nisCode: record.NIS_code
         }
       }
-      byMuni[normalizedCode].total += record[selectedMetric]
-      byMuni[normalizedCode].count += 1
+      byMuni[record.NIS_code].total += record[selectedMetric]
+      byMuni[record.NIS_code].count += 1
     })
 
     // Sort all municipalities by total (high to low) and assign ranks
@@ -370,43 +416,37 @@ export function InvesteringenBVSection() {
 
     // Default: show top 20 municipalities
     return allMunicipalities.slice(0, 20)
-  }, [dataWithoutGeoFilter, selectedMetric, geoSelection])
+  }, [allMunicipalitySummary, dataWithoutGeoFilter, selectedMetric, geoSelection, lookups?.municipalities])
 
   // Map data: Latest rapportjaar (2026)
   const mapData = useMemo(() => {
+    if (allMunicipalitySummary === null) {
+      return []
+    }
+
     const latestYear = 2026
     const byMuni: Record<string, { municipalityCode: string; value: number }> = {}
 
     filteredData
       .filter(d => d.Rapportjaar === latestYear)
       .forEach(record => {
-        // Normalize NIS code to handle 2025 mergers
-        const normalizedCode = normalizeNisCode(record.NIS_code)
-        if (!normalizedCode) return
-
-        if (!byMuni[normalizedCode]) {
-          // If fusion, use the new name
-          const fusion = getFusionInfo(normalizedCode)
-          const name = fusion ? fusion.newName : getMunicipalityName(normalizedCode, lookups?.municipalities)
-
-          byMuni[normalizedCode] = { municipalityCode: normalizedCode, value: 0 }
+        if (!byMuni[record.NIS_code]) {
+          byMuni[record.NIS_code] = { municipalityCode: record.NIS_code, value: 0 }
         }
-        byMuni[normalizedCode].value += record[selectedMetric]
+        byMuni[record.NIS_code].value += record[selectedMetric]
       })
 
     return Object.values(byMuni)
-  }, [filteredData, selectedMetric])
+  }, [allMunicipalitySummary, filteredData, selectedMetric])
 
   // Get available municipalities from the filtered data (without geo filter)
   const availableMunicipalities = useMemo(() => {
-    // We normalize codes here too, so the user sees merged municipality names in the filter
-    const normalizedSet = new Set<string>()
-    dataWithoutGeoFilter.forEach(d => {
-      const c = normalizeNisCode(d.NIS_code)
-      if (c) normalizedSet.add(c)
-    })
-    return Array.from(normalizedSet)
-  }, [dataWithoutGeoFilter])
+    return lookups ? Object.keys(lookups.municipalities) : []
+  }, [lookups])
+
+  const isChartMunicipalityLoading = geoSelection.type === 'municipality' &&
+    selectedMunicipalityChartData.length === 0 &&
+    (isSelectedMunicipalityLoading || selectedMunicipalitySummary?.code !== geoSelection.code)
 
   if (error) {
     return (
@@ -440,12 +480,6 @@ export function InvesteringenBVSection() {
           <div className="flex items-center justify-between">
             <CardTitle>Investeringen per beleidsdomein</CardTitle>
             <div className="flex items-center gap-4">
-              {loadedChunks < totalChunks && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Laden data: {Math.round((loadedChunks / totalChunks) * 100)}%
-                </div>
-              )}
               <ExportButtons
                 title="Investeringen per beleidsdomein"
                 slug="gemeentelijke-investeringen"
@@ -514,101 +548,134 @@ export function InvesteringenBVSection() {
               </TabsList>
 
               <TabsContent value="chart" className="mt-4">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium ml-16">
-                    {yAxisLabel.text}
-                    <span className="font-bold">
-                      {yAxisLabel.boldText}
-                    </span>
+                {isChartMunicipalityLoading ? (
+                  <div className="h-[400px] flex flex-col items-center justify-center space-y-4 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm italic">
+                      {isSelectedMunicipalityLoading ? 'Laden van gemeentelijke detaildata...' : 'Detaildata wordt voorbereid...'}
+                    </p>
                   </div>
-                  <div className="w-full h-[400px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="Rapportjaar" />
-                        <YAxis
-                          tickFormatter={yAxisFormatter}
-                        />
-                        <Tooltip
-                          formatter={(value) => {
-                            if (typeof value !== 'number') return ''
-                            return formatScaledTooltipValue(value, yAxisFormatter, yAxisScaleUnit)
-                          }}
-                          labelFormatter={(label) => `Rapportjaar ${label}`}
-                        />
-                        <Bar dataKey="value" fill={CHART_SERIES_COLORS[0]} name={selectedMetric === 'Totaal' ? 'Totaal' : 'Gemiddelde per inwoner'} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {geoSelection.type === 'all'
-                    ? selectedMetric === 'Totaal'
-                      ? 'Som van alle gemeenten'
-                      : 'Gemiddelde over alle gemeenten'
-                    : 'Geselecteerde regio/provincie/gemeente'
-                  }
-                </p>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium ml-16">
+                        {yAxisLabel.text}
+                        <span className="font-bold">
+                          {yAxisLabel.boldText}
+                        </span>
+                      </div>
+                      <div className="w-full h-[400px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="Rapportjaar" />
+                            <YAxis
+                              tickFormatter={yAxisFormatter}
+                            />
+                            <Tooltip
+                              formatter={(value) => {
+                                if (typeof value !== 'number') return ''
+                                return formatScaledTooltipValue(value, yAxisFormatter, yAxisScaleUnit)
+                              }}
+                              labelFormatter={(label) => `Rapportjaar ${label}`}
+                            />
+                            <Bar dataKey="value" fill={CHART_SERIES_COLORS[0]} name={selectedMetric === 'Totaal' ? 'Totaal' : 'Gemiddelde per inwoner'} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {geoSelection.type === 'all'
+                        ? selectedMetric === 'Totaal'
+                          ? 'Som van alle gemeenten'
+                          : 'Gemiddelde over alle gemeenten'
+                        : 'Geselecteerde regio/provincie/gemeente'
+                      }
+                    </p>
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="table" className="mt-4">
-                <div className="rounded-md border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="p-2 text-left font-medium w-16">Rank</th>
-                        <th className="p-2 text-left font-medium">Gemeente</th>
-                        <th className="p-2 text-right font-medium">
-                          {selectedMetric === 'Totaal' ? 'Totaal' : 'Per inwoner'}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableData.length === 0 ? (
-                        <tr>
-                          <td colSpan={3} className="p-4 text-center text-muted-foreground italic">
-                            Data aan het laden...
-                          </td>
-                        </tr>
-                      ) : (
-                        tableData.map((row, i) => {
-                          const isSelected = geoSelection.type === 'municipality' && geoSelection.code === row.nisCode
-                          return (
-                            <tr key={i} className={`border-b ${isSelected ? 'bg-primary/10 font-semibold' : ''}`}>
-                              <td className="p-2 text-center text-muted-foreground">{row.rank}</td>
-                              <td className="p-2">{row.municipality}</td>
-                              <td className="p-2 text-right">
-                                {selectedMetric === 'Totaal'
-                                  ? formatFullCurrency(row.total)
-                                  : `€ ${row.total.toFixed(2)}`
-                                }
+                {allMunicipalitySummary === null ? (
+                  <div className="h-48 flex flex-col items-center justify-center space-y-4 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm italic">
+                      {isAllMunicipalityDetailLoading ? 'Laden van gemeentelijke detaildata...' : 'Detaildata wordt voorbereid...'}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-md border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="p-2 text-left font-medium w-16">Rank</th>
+                            <th className="p-2 text-left font-medium">Gemeente</th>
+                            <th className="p-2 text-right font-medium">
+                              {selectedMetric === 'Totaal' ? 'Totaal' : 'Per inwoner'}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tableData.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="p-4 text-center text-muted-foreground italic">
+                                Geen data beschikbaar voor deze selectie.
                               </td>
                             </tr>
-                          )
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {geoSelection.type === 'municipality' && geoSelection.code
-                    ? 'Top 20 gemeenten (inclusief geselecteerde gemeente, rapportjaar 2026)'
-                    : 'Top 20 gemeenten (rapportjaar 2026)'}
-                </p>
+                          ) : (
+                            tableData.map((row, i) => {
+                              const isSelected = geoSelection.type === 'municipality' && geoSelection.code === row.nisCode
+                              return (
+                                <tr key={i} className={`border-b ${isSelected ? 'bg-primary/10 font-semibold' : ''}`}>
+                                  <td className="p-2 text-center text-muted-foreground">{row.rank}</td>
+                                  <td className="p-2">{row.municipality}</td>
+                                  <td className="p-2 text-right">
+                                    {selectedMetric === 'Totaal'
+                                      ? formatFullCurrency(row.total)
+                                      : `€ ${row.total.toFixed(2)}`
+                                    }
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {geoSelection.type === 'municipality' && geoSelection.code
+                        ? 'Top 20 gemeenten (inclusief geselecteerde gemeente, rapportjaar 2026)'
+                        : 'Top 20 gemeenten (rapportjaar 2026)'}
+                    </p>
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="map" className="mt-4">
-                <InvesteringenMap
-                  data={mapData.map(d => ({
-                    value: d.value,
-                    municipality: getMunicipalityName(d.municipalityCode, lookups?.municipalities),
-                    nis_code: d.municipalityCode
-                  }))}
-                  selectedMetric={selectedMetric === 'Totaal' ? 'total' : 'per_capita'}
-                />
-                <p className="text-sm text-muted-foreground mt-2">
-                  Rapportjaar 2026 - {selectedMetric === 'Totaal' ? 'Totale uitgave' : 'Uitgave per inwoner'}
-                </p>
+                {allMunicipalitySummary === null ? (
+                  <div className="h-[400px] flex flex-col items-center justify-center space-y-4 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm italic">
+                      {isAllMunicipalityDetailLoading ? 'Laden van gemeentelijke detaildata...' : 'Detaildata wordt voorbereid...'}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <InvesteringenMap
+                      data={mapData.map(d => ({
+                        value: d.value,
+                        municipality: getMunicipalityName(d.municipalityCode, lookups?.municipalities),
+                        nis_code: d.municipalityCode
+                      }))}
+                      selectedMetric={selectedMetric === 'Totaal' ? 'total' : 'per_capita'}
+                    />
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Rapportjaar 2026 - {selectedMetric === 'Totaal' ? 'Totale uitgave' : 'Uitgave per inwoner'}
+                    </p>
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           </div>

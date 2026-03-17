@@ -28,7 +28,7 @@ import {
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
-import { getPublicPath } from "@/lib/path-utils"
+import { fetchInvesteringenJson } from "@/lib/investeringen-data"
 import { normalizeNisCode, getFusionInfo, getConstituents } from "@/lib/nis-fusion-utils"
 
 interface BVLookups {
@@ -151,22 +151,14 @@ export function InvesteringenBVTopFieldsSection({
         setMuniData([])
         setLoadedChunks(0)
 
-        const [metaRes, lookupsRes] = await Promise.all([
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/metadata.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/bv_lookups.json')),
+        const [meta, lookupsData] = await Promise.all([
+          fetchInvesteringenJson<{ bv_chunks: number }>('/data/gemeentelijke-investeringen/metadata.json'),
+          fetchInvesteringenJson<BVLookups>('/data/gemeentelijke-investeringen/bv_lookups.json'),
         ])
 
         if (cancelled) return
 
-        if (!metaRes.ok) throw new Error(`Failed to load metadata: ${metaRes.statusText}`)
-        if (!lookupsRes.ok) throw new Error(`Failed to load lookups: ${lookupsRes.statusText}`)
-
-        const meta = await metaRes.json()
-        const lookupsData = validateLookups(await lookupsRes.json())
-
-        if (cancelled) return
-
-        setLookups(lookupsData)
+        setLookups(validateLookups(lookupsData))
         setTotalChunks(meta.bv_chunks)
 
         setIsLoading(false)
@@ -176,11 +168,11 @@ export function InvesteringenBVTopFieldsSection({
         for (let i = 0; i < meta.bv_chunks; i++) {
           if (cancelled) return
 
-          const chunkRes = await fetch(getPublicPath(`/data/gemeentelijke-investeringen/bv_municipality_data_chunk_${i}.json`))
-          if (!chunkRes.ok) {
-            throw new Error(`Failed to load chunk ${i}: ${chunkRes.statusText}`)
-          }
-          const chunkData = validateChunkData(await chunkRes.json())
+          const chunkData = validateChunkData(
+            await fetchInvesteringenJson<BVRecord[]>(
+              `/data/gemeentelijke-investeringen/bv_municipality_data_chunk_${i}.json`
+            )
+          )
           allChunks.push(...chunkData)
           setMuniData([...allChunks])
           setLoadedChunks(i + 1)

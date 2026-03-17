@@ -14,7 +14,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { MunicipalityMap } from "../shared/MunicipalityMap"
 import { InvesteringenMap } from "./InvesteringenMap"
 import { SimpleGeoFilter } from "./SimpleGeoFilter"
 import { SimpleGeoContext } from "../shared/GeoContext"
@@ -29,7 +28,7 @@ import {
   formatCurrency as formatFullCurrency,
 } from "@/lib/number-formatters"
 import { CHART_SERIES_COLORS } from "@/lib/chart-theme"
-import { getPublicPath } from "@/lib/path-utils"
+import { fetchInvesteringenJson } from "@/lib/investeringen-data"
 import { normalizeNisCode, getFusionInfo, getConstituents } from "@/lib/nis-fusion-utils"
 
 interface REKLookups {
@@ -47,28 +46,14 @@ interface REKRecord {
   Per_inwoner: number
 }
 
-interface REKVlaanderenRecord {
-  Rapportjaar: number
-  Niveau_3: string
-  Alg_rekening: string
-  Totaal: number
-  Per_inwoner: number
-}
+type REKSectionViewType = 'chart' | 'table' | 'map'
 
-
-
-// Removed local formatters - using centralized formatters from @/lib/number-formatters
-
-// Runtime validation helpers
-function validateMetadata(data: unknown): { bv_chunks: number; rek_chunks: number } {
-  if (!data || typeof data !== 'object') {
-    throw new Error('Invalid metadata: expected object')
-  }
-  const obj = data as Record<string, unknown>
-  if (typeof obj.bv_chunks !== 'number' || typeof obj.rek_chunks !== 'number') {
-    throw new Error('Invalid metadata: missing or invalid chunk counts')
-  }
-  return obj as { bv_chunks: number; rek_chunks: number }
+interface InvesteringenREKSectionProps {
+  viewType?: REKSectionViewType
+  metric?: string | null
+  municipality?: string | null
+  niveau3?: string | null
+  rekening?: string | null
 }
 
 function validateLookups(data: unknown): REKLookups {
@@ -88,13 +73,6 @@ function validateLookups(data: unknown): REKLookups {
   }
 }
 
-function validateVlaanderenData(data: unknown): REKVlaanderenRecord[] {
-  if (!Array.isArray(data)) {
-    throw new Error('Invalid Vlaanderen data: expected array')
-  }
-  return data as REKVlaanderenRecord[]
-}
-
 function validateChunkData(data: unknown): REKRecord[] {
   if (!Array.isArray(data)) {
     throw new Error('Invalid chunk data: expected array')
@@ -102,9 +80,14 @@ function validateChunkData(data: unknown): REKRecord[] {
   return data as REKRecord[]
 }
 
-export function InvesteringenREKSection() {
+export function InvesteringenREKSection({
+  viewType = 'chart',
+  metric = null,
+  municipality = null,
+  niveau3 = null,
+  rekening = null,
+}: InvesteringenREKSectionProps = {}) {
   const [lookups, setLookups] = useState<REKLookups | null>(null)
-  const [vlaanderenData, setVlaanderenData] = useState<REKVlaanderenRecord[]>([])
   const [muniData, setMuniData] = useState<REKRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadedChunks, setLoadedChunks] = useState(0)
@@ -114,11 +97,43 @@ export function InvesteringenREKSection() {
   const [selectedNiveau3, setSelectedNiveau3] = useState<string>('')
   const [selectedAlgRekening, setSelectedAlgRekening] = useState<string>('')
   const [selectedMetric, setSelectedMetric] = useState<'Totaal' | 'Per_inwoner'>('Totaal')
-  const [currentView, setCurrentView] = useState<'chart' | 'table' | 'map'>('chart')
+  const [currentView, setCurrentView] = useState<REKSectionViewType>(viewType)
   const [geoSelection, setGeoSelection] = useState<{
     type: 'all' | 'region' | 'province' | 'arrondissement' | 'municipality'
     code?: string
   }>({ type: 'all' })
+
+  useEffect(() => {
+    setCurrentView(viewType)
+  }, [viewType])
+
+  useEffect(() => {
+    if (metric === 'per_capita') {
+      setSelectedMetric('Per_inwoner')
+    } else if (metric === 'total') {
+      setSelectedMetric('Totaal')
+    }
+  }, [metric])
+
+  useEffect(() => {
+    if (municipality) {
+      setGeoSelection({ type: 'municipality', code: municipality })
+    } else {
+      setGeoSelection({ type: 'all' })
+    }
+  }, [municipality])
+
+  useEffect(() => {
+    if (niveau3 !== null) {
+      setSelectedNiveau3(niveau3)
+    }
+  }, [niveau3])
+
+  useEffect(() => {
+    if (rekening !== null) {
+      setSelectedAlgRekening(rekening)
+    }
+  }, [rekening])
 
   // Load initial data and start chunk loading
   useEffect(() => {
@@ -130,26 +145,16 @@ export function InvesteringenREKSection() {
         setMuniData([])
         setLoadedChunks(0)
 
-        const [metaRes, lookupsRes, vlaanderenRes] = await Promise.all([
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/metadata.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/rek_lookups.json')),
-          fetch(getPublicPath('/data/gemeentelijke-investeringen/rek_vlaanderen_data.json'))
+        const [meta, lookupsData] = await Promise.all([
+          fetchInvesteringenJson<{ rek_chunks: number; bv_chunks: number }>(
+            '/data/gemeentelijke-investeringen/metadata.json'
+          ),
+          fetchInvesteringenJson<REKLookups>('/data/gemeentelijke-investeringen/rek_lookups.json'),
         ])
 
         if (cancelled) return
 
-        if (!metaRes.ok) throw new Error(`Failed to load metadata: ${metaRes.statusText}`)
-        if (!lookupsRes.ok) throw new Error(`Failed to load lookups: ${lookupsRes.statusText}`)
-        if (!vlaanderenRes.ok) throw new Error(`Failed to load Vlaanderen data: ${vlaanderenRes.statusText}`)
-
-        const meta = validateMetadata(await metaRes.json())
-        const lookupsData = validateLookups(await lookupsRes.json())
-        const vlaanderen = validateVlaanderenData(await vlaanderenRes.json())
-
-        if (cancelled) return
-
-        setLookups(lookupsData)
-        setVlaanderenData(vlaanderen)
+        setLookups(validateLookups(lookupsData))
         setTotalChunks(meta.rek_chunks)
 
         setIsLoading(false)
@@ -159,11 +164,11 @@ export function InvesteringenREKSection() {
         for (let i = 0; i < meta.rek_chunks; i++) {
           if (cancelled) return
 
-          const chunkRes = await fetch(getPublicPath(`/data/gemeentelijke-investeringen/rek_municipality_data_chunk_${i}.json`))
-          if (!chunkRes.ok) {
-            throw new Error(`Failed to load chunk ${i}: ${chunkRes.statusText}`)
-          }
-          const chunkData = validateChunkData(await chunkRes.json())
+          const chunkData = validateChunkData(
+            await fetchInvesteringenJson<REKRecord[]>(
+              `/data/gemeentelijke-investeringen/rek_municipality_data_chunk_${i}.json`
+            )
+          )
           allChunks.push(...chunkData)
           setMuniData([...allChunks])
           setLoadedChunks(i + 1)
@@ -322,7 +327,7 @@ export function InvesteringenREKSection() {
     }
 
     return Object.values(byYear).sort((a, b) => a.Rapportjaar - b.Rapportjaar)
-  }, [filteredData, selectedMetric, geoSelection])
+  }, [filteredData, selectedMetric, geoSelection, dataWithoutGeoFilter])
 
   // Auto-scale formatter for Y-axis to prevent label overflow
   const { formatter: yAxisFormatter, scaleLabel: yAxisScaleLabel, scaleUnit: yAxisScaleUnit } = useMemo(() => {
@@ -394,7 +399,7 @@ export function InvesteringenREKSection() {
 
     // Default: show top 20 municipalities
     return allMunicipalities.slice(0, 20)
-  }, [dataWithoutGeoFilter, selectedMetric, geoSelection])
+  }, [dataWithoutGeoFilter, selectedMetric, geoSelection, lookups?.municipalities])
 
   // Map data: Latest rapportjaar (2026)
   const mapData = useMemo(() => {
@@ -409,10 +414,6 @@ export function InvesteringenREKSection() {
         if (!normalizedCode) return
 
         if (!byMuni[normalizedCode]) {
-          // If fusion, use the new name
-          const fusion = getFusionInfo(normalizedCode)
-          const name = fusion ? fusion.newName : getMunicipalityName(normalizedCode, lookups?.municipalities)
-
           byMuni[normalizedCode] = { municipalityCode: normalizedCode, value: 0 }
         }
         byMuni[normalizedCode].value += record[selectedMetric]

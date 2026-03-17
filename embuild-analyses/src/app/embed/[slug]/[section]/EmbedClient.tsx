@@ -10,10 +10,11 @@ import { EnergiekaartPremiesEmbed } from "@/components/analyses/energiekaart-pre
 import { EpcLabelverdelingEmbed } from "@/components/analyses/epc-labelverdeling/EpcLabelverdelingEmbed"
 import { VergunningenAanvragenEmbed } from "@/components/analyses/vergunningen-aanvragen/VergunningenAanvragenEmbed"
 import { GebouwenparkEmbed } from "@/components/analyses/gebouwenpark/GebouwenparkEmbed"
-import { InvesteringenEmbed } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenEmbed"
+import { InvesteringenBVSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVSection"
 import { InvesteringenBVTopFieldsSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVTopFieldsSection"
 import { InvesteringenBVCategorySection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVCategorySection"
 import { InvesteringenBVDifferenceSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVDifferenceSection"
+import { InvesteringenREKSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenREKSection"
 import { InvesteringenREKCategorySection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenREKCategorySection"
 import { InvesteringenBVScatterSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVScatterSection"
 import { InvesteringenREKScatterSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenREKScatterSection"
@@ -580,16 +581,35 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
         )
       }
 
+      if (section === "investments-bv") {
+        return (
+          <InvesteringenBVSection
+            viewType={urlParams.view}
+            metric={urlParams.metric}
+            municipality={urlParams.municipality}
+            domain={urlParams.domain}
+          />
+        )
+      }
+
+      if (section === "investments-rek") {
+        return (
+          <InvesteringenREKSection
+            viewType={urlParams.view}
+            metric={urlParams.metric}
+            municipality={urlParams.municipality}
+            niveau3={urlParams.niveau3}
+            rekening={urlParams.rekening}
+          />
+        )
+      }
+
       return (
-        <InvesteringenEmbed
-          section={section as "investments-bv" | "investments-rek"}
-          viewType={urlParams.view}
-          metric={urlParams.metric}
-          municipality={urlParams.municipality}
-          domain={urlParams.domain}
-          niveau3={urlParams.niveau3}
-          rekening={urlParams.rekening}
-        />
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">
+            Ongeldige investeringen-sectie: {section}
+          </p>
+        </div>
       )
     }
 
