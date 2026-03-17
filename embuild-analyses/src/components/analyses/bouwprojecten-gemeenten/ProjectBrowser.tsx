@@ -109,8 +109,10 @@ export function ProjectBrowser() {
   const municipalityCacheRef = useRef<Map<string, Project[]>>(new Map())
   const categoryCacheRef = useRef<Map<string, Project[]>>(new Map())
   const requestIdRef = useRef(0)
+  const detailPanelRef = useRef<HTMLDivElement | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isEmbeddedInIframe, setIsEmbeddedInIframe] = useState(false)
 
   const [filters, setFilters] = useState<ProjectFilters>({})
   const [sortOption, setSortOption] = useState<SortOption>("amount-desc")
@@ -176,8 +178,27 @@ export function ProjectBrowser() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    setIsEmbeddedInIframe(window.parent !== window)
+  }, [])
+
+  useEffect(() => {
     setSelectedProject(null)
   }, [dataSourceKey, filters.searchQuery])
+
+  useEffect(() => {
+    if (!isEmbeddedInIframe || !selectedProject) {
+      return
+    }
+
+    detailPanelRef.current?.scrollIntoView({
+      block: "start",
+      behavior: "smooth",
+    })
+  }, [isEmbeddedInIframe, selectedProject])
 
   useEffect(() => {
     if (!metadata || municipalities.length === 0) {
@@ -711,6 +732,18 @@ export function ProjectBrowser() {
             )}
           </div>
 
+          {selectedProject && isEmbeddedInIframe && (
+            <div ref={detailPanelRef}>
+              <ProjectDetailModal
+                project={selectedProject}
+                isOpen={true}
+                onClose={() => setSelectedProject(null)}
+                metadata={metadata}
+                embedded={true}
+              />
+            </div>
+          )}
+
           <ProjectList
             projects={filteredAndSortedProjects}
             onProjectClick={setSelectedProject}
@@ -719,7 +752,7 @@ export function ProjectBrowser() {
         </>
       )}
 
-      {selectedProject && (
+      {selectedProject && !isEmbeddedInIframe && (
         <ProjectDetailModal
           project={selectedProject}
           isOpen={!!selectedProject}
