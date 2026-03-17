@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { getDataPath } from "@/lib/path-utils"
 import { ChevronDown, ChevronUp, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProjectDetailModal } from "./ProjectDetailModal"
+import { fetchBouwprojectenJson } from "@/lib/bouwprojecten-data"
 import type { Project, ProjectMetadata } from "@/types/project-types"
 
 export function TopProjectsByCategory() {
@@ -17,34 +17,45 @@ export function TopProjectsByCategory() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+
     const loadMetadata = async () => {
       try {
-        const cacheBuster = new Date().getTime()
-        const response = await fetch(getDataPath(`/data/bouwprojecten-gemeenten/projects_metadata.json?t=${cacheBuster}`), {
-          cache: 'no-store'
-        })
-        if (!response.ok) throw new Error("Failed to load metadata")
-        const data = await response.json()
-        setMetadata(data)
-      } catch (err) {
-        console.error("Error loading metadata:", err)
-        setError("Kon metadata niet laden")
+        const data = await fetchBouwprojectenJson<ProjectMetadata>(
+          "/data/bouwprojecten-gemeenten/projects_metadata.json"
+        )
+
+        if (!cancelled) {
+          setMetadata(data)
+        }
+      } catch (loadError) {
+        console.error("Error loading metadata:", loadError)
+        if (!cancelled) {
+          setError("Kon metadata niet laden")
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
+
     loadMetadata()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const toggleCategory = (categoryId: string) => {
-    setExpandedCategories(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(categoryId)) {
-        newSet.delete(categoryId)
+    setExpandedCategories((previous) => {
+      const next = new Set(previous)
+      if (next.has(categoryId)) {
+        next.delete(categoryId)
       } else {
-        newSet.add(categoryId)
+        next.add(categoryId)
       }
-      return newSet
+      return next
     })
   }
 
@@ -64,13 +75,12 @@ export function TopProjectsByCategory() {
     )
   }
 
-  // Sort categories by total amount (descending), filter out empty ones, Overige at bottom
+  const topProjectsLimit = metadata.category_top_projects_limit ?? 10
   const sortedCategories = Object.entries(metadata.categories)
-    .filter(([, cat]) => cat.project_count > 0)
+    .filter(([, category]) => category.project_count > 0)
     .sort((a, b) => {
-      // Always put "overige" at the bottom
-      if (a[0] === 'overige') return 1
-      if (b[0] === 'overige') return -1
+      if (a[0] === "overige") return 1
+      if (b[0] === "overige") return -1
       return b[1].total_amount - a[1].total_amount
     })
 
@@ -79,14 +89,14 @@ export function TopProjectsByCategory() {
       <div className="rounded-lg border bg-card p-6">
         <h3 className="text-xl font-semibold mb-2">Top projecten per categorie</h3>
         <p className="text-muted-foreground text-sm">
-          Top 10 grootste investeringsprojecten per sector, gebaseerd op totaalbedrag over de volledige planperiode 2026-2031.
+          Top {topProjectsLimit} grootste investeringsprojecten per sector, gebaseerd op totaalbedrag over de volledige planperiode 2026-2031.
         </p>
       </div>
 
       <div className="space-y-3">
         {sortedCategories.map(([categoryId, category]) => {
           const isExpanded = expandedCategories.has(categoryId)
-          const hasProjects = category.largest_projects && category.largest_projects.length > 0
+          const hasProjects = category.largest_projects.length > 0
 
           return (
             <Card key={categoryId} className="overflow-hidden">
@@ -95,8 +105,8 @@ export function TopProjectsByCategory() {
                   <div className="flex-1">
                     <CardTitle className="text-lg">{category.label}</CardTitle>
                     <CardDescription className="mt-1">
-                      {category.project_count.toLocaleString("nl-BE")} projecten · 
-                      totaal €{(category.total_amount / 1_000_000).toFixed(1)}M · 
+                      {category.project_count.toLocaleString("nl-BE")} projecten ·
+                      totaal €{(category.total_amount / 1_000_000).toFixed(1)}M ·
                       gemiddeld €{(category.total_amount / category.project_count / 1000).toFixed(0)}k
                     </CardDescription>
                   </div>
@@ -115,7 +125,7 @@ export function TopProjectsByCategory() {
                       ) : (
                         <>
                           <ChevronDown className="h-4 w-4 mr-1" />
-                          Toon top {Math.min(10, category.largest_projects.length)}
+                          Toon top {Math.min(topProjectsLimit, category.largest_projects.length)}
                         </>
                       )}
                     </Button>
@@ -126,7 +136,7 @@ export function TopProjectsByCategory() {
               {isExpanded && hasProjects && (
                 <CardContent className="pt-0">
                   <div className="space-y-3">
-                    {category.largest_projects.map((project, idx) => (
+                    {category.largest_projects.map((project, index) => (
                       <div
                         key={`${project.nis_code}-${project.ac_code}`}
                         className="rounded-lg border bg-muted/50 p-4"
@@ -135,7 +145,7 @@ export function TopProjectsByCategory() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <Badge variant="outline" className="font-mono text-xs">
-                                #{idx + 1}
+                                #{index + 1}
                               </Badge>
                               <span className="text-sm text-muted-foreground">
                                 {project.municipality}
@@ -148,33 +158,38 @@ export function TopProjectsByCategory() {
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                // Convert to full Project type for modal
-                                const fullProject: Project = {
+                                setSelectedProject({
                                   municipality: project.municipality,
                                   nis_code: project.nis_code,
-                                  bd_code: project.bd_code || '',
-                                  bd_short: project.bd_short || '',
-                                  bd_long: project.bd_long || '',
-                                  ap_code: project.ap_code || '',
-                                  ap_short: project.ap_short || '',
-                                  ap_long: project.ap_long || '',
+                                  bd_code: project.bd_code || "",
+                                  bd_short: project.bd_short || "",
+                                  bd_long: project.bd_long || "",
+                                  ap_code: project.ap_code || "",
+                                  ap_short: project.ap_short || "",
+                                  ap_long: project.ap_long || "",
                                   ac_code: project.ac_code,
                                   ac_short: project.ac_short,
-                                  ac_long: project.ac_long || project.ap_long || project.bd_long || project.ap_short || project.bd_short || project.ac_short,
+                                  ac_long:
+                                    project.ac_long ||
+                                    project.ap_long ||
+                                    project.bd_long ||
+                                    project.ap_short ||
+                                    project.bd_short ||
+                                    project.ac_short,
                                   total_amount: project.total_amount,
                                   amount_per_capita: project.amount_per_capita || 0,
-                                  yearly_amounts: project.yearly_amounts as Project['yearly_amounts'],
-                                  yearly_per_capita: (project.yearly_per_capita as Project['yearly_per_capita']) || {
-                                    "2026": 0,
-                                    "2027": 0,
-                                    "2028": 0,
-                                    "2029": 0,
-                                    "2030": 0,
-                                    "2031": 0
-                                  },
-                                  categories: [category.id]
-                                }
-                                setSelectedProject(fullProject)
+                                  yearly_amounts: project.yearly_amounts as Project["yearly_amounts"],
+                                  yearly_per_capita:
+                                    (project.yearly_per_capita as Project["yearly_per_capita"]) || {
+                                      "2026": 0,
+                                      "2027": 0,
+                                      "2028": 0,
+                                      "2029": 0,
+                                      "2030": 0,
+                                      "2031": 0,
+                                    },
+                                  categories: [category.id],
+                                })
                               }}
                             >
                               <FileText className="h-4 w-4 mr-1" />
@@ -191,7 +206,6 @@ export function TopProjectsByCategory() {
                           </div>
                         </div>
 
-                        {/* Yearly breakdown */}
                         <div className="mt-3 pt-3 border-t">
                           <div className="grid grid-cols-6 gap-2 text-xs">
                             {Object.entries(project.yearly_amounts)
@@ -202,10 +216,7 @@ export function TopProjectsByCategory() {
                                     {year}
                                   </div>
                                   <div className="font-mono">
-                                    {amount > 0 
-                                      ? `€${(amount / 1000).toFixed(0)}k`
-                                      : "—"
-                                    }
+                                    {amount > 0 ? `€${(amount / 1000).toFixed(0)}k` : "—"}
                                   </div>
                                 </div>
                               ))}
@@ -220,6 +231,7 @@ export function TopProjectsByCategory() {
           )
         })}
       </div>
+
       {selectedProject && (
         <ProjectDetailModal
           project={selectedProject}
@@ -227,6 +239,7 @@ export function TopProjectsByCategory() {
           onClose={() => setSelectedProject(null)}
           metadata={metadata}
         />
-      )}    </div>
+      )}
+    </div>
   )
 }

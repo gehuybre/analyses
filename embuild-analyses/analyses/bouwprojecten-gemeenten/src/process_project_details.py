@@ -30,6 +30,7 @@ if DATA_REPO_AVAILABLE:
 # Input files
 INPUT_CSV = DATA_DIR / 'data-54.csv'  # Primary data source with policy categorization
 PARQUET_FULL = SCRIPT_DIR.parent / 'results' / 'projects_2026_full.parquet'
+CATEGORY_TOP_PROJECTS_LIMIT = 20
 
 
 def _safe_parent(path: Path, level: int):
@@ -504,6 +505,114 @@ def process_projects(df, nis_lookups, policy_lookup=None):
     return projects
 
 
+def sanitize_value(val):
+    """Recursively sanitize values for JSON serialization."""
+    import numpy as _np
+    import pandas as _pd
+
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        return {k: sanitize_value(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple)):
+        return [sanitize_value(item) for item in val]
+    if isinstance(val, (_np.integer, _np.floating)):
+        return float(val)
+    if isinstance(val, _np.ndarray):
+        return val.tolist()
+    if isinstance(val, _pd.Timestamp):
+        return str(val)
+    return val
+
+
+def sanitize_project(project):
+    """Convert project records to JSON-serializable native Python values."""
+    return sanitize_value(project)
+
+
+def write_json_output(relative_path: Path, payload):
+    """Write JSON payload to the public data directory and the split data repo when available."""
+    filepath = PUBLIC_DATA_DIR / relative_path
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    if DATA_REPO_AVAILABLE:
+        repo_filepath = DATA_REPO_DIR / relative_path
+        repo_filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(repo_filepath, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    return filepath
+
+
+def clear_generated_json_directory(relative_dir: Path):
+    """Remove stale JSON files from a generated subdirectory before re-exporting."""
+    for base_dir in [PUBLIC_DATA_DIR, DATA_REPO_DIR if DATA_REPO_AVAILABLE else None]:
+        if not base_dir:
+            continue
+        target_dir = base_dir / relative_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for json_file in target_dir.glob('*.json'):
+            json_file.unlink()
+
+
+def export_municipality_files(projects_sorted):
+    """Write one JSON file per municipality plus a lightweight municipality index."""
+    print("\nExporting municipality-level files...")
+
+    clear_generated_json_directory(Path("municipality"))
+
+    municipalities = {}
+    for project in projects_sorted:
+        municipalities.setdefault(project['nis_code'], []).append(project)
+
+    municipality_index = []
+    for nis_code, municipality_projects in sorted(
+        municipalities.items(),
+        key=lambda item: item[1][0]['municipality']
+    ):
+        municipality_projects = sorted(
+            municipality_projects,
+            key=lambda item: item['total_amount'],
+            reverse=True,
+        )
+        municipality_name = municipality_projects[0]['municipality']
+        relative_path = Path("municipality") / f"{nis_code}.json"
+        write_json_output(relative_path, [sanitize_project(project) for project in municipality_projects])
+        municipality_index.append({
+            "nis_code": nis_code,
+            "municipality": municipality_name,
+            "file": relative_path.as_posix(),
+            "project_count": len(municipality_projects),
+            "total_amount": round(sum(project['total_amount'] for project in municipality_projects), 2),
+        })
+
+    write_json_output(Path("municipality_index.json"), municipality_index)
+    print(f"  → municipality_index.json ({len(municipality_index)} municipalities)")
+
+
+def export_category_files(projects_sorted, category_summaries):
+    """Write one full JSON file per category and attach file references to metadata."""
+    print("\nExporting category-level files...")
+
+    clear_generated_json_directory(Path("category"))
+
+    category_projects = {}
+    for project in projects_sorted:
+        for category_id in project.get('categories', []) or ['overige']:
+            category_projects.setdefault(category_id, []).append(project)
+
+    for category_id, category_projects_list in category_projects.items():
+        relative_path = Path("category") / f"{category_id}.json"
+        write_json_output(relative_path, [sanitize_project(project) for project in category_projects_list])
+        if category_id in category_summaries:
+            category_summaries[category_id]['data_file'] = relative_path.as_posix()
+        print(f"  → {relative_path.as_posix()} ({len(category_projects_list)} projects)")
+
+    return category_summaries
+
+
 def chunk_and_save(projects, chunk_size=2000):
     """Split projects into chunks and save as JSON files."""
     print("\n" + "="*60)
@@ -518,82 +627,24 @@ def chunk_and_save(projects, chunk_size=2000):
 
     print(f"Creating {len(chunks)} chunks of ~{chunk_size} projects each")
 
-    def sanitize_project(p):
-        """Convert numpy/pandas scalars & containers to native types for JSON serialisation."""
-        out = {}
-        import numpy as _np
-        import pandas as _pd
-
-        for k, v in p.items():
-            if v is None:
-                out[k] = None
-                continue
-
-            # dict -> sanitize recursively
-            if isinstance(v, dict):
-                out[k] = {str(kk): (vv.tolist() if isinstance(vv, _np.ndarray) else (vv.to_dict() if isinstance(vv, _pd.Series) else vv)) if not isinstance(vv, dict) else sanitize_project(vv) for kk, vv in v.items()}
-                continue
-
-            # list/tuple/ndarray
-            if isinstance(v, (list, tuple, _np.ndarray)):
-                new_list = []
-                for item in v:
-                    if isinstance(item, dict):
-                        new_list.append(sanitize_project(item))
-                    else:
-                        try:
-                            if isinstance(item, (_np.integer, _np.floating)):
-                                new_list.append(float(item))
-                            else:
-                                new_list.append(item)
-                        except Exception:
-                            new_list.append(item)
-                out[k] = new_list
-                continue
-
-            # numpy scalar
-            try:
-                if isinstance(v, (_np.integer, _np.floating)):
-                    out[k] = float(v)
-                    continue
-            except Exception:
-                pass
-
-            # pandas timestamp
-            try:
-                if isinstance(v, _pd.Timestamp):
-                    out[k] = str(v)
-                    continue
-            except Exception:
-                pass
-
-            out[k] = v
-        return out
-
     for i, chunk in enumerate(chunks):
         filename = f"projects_2026_chunk_{i}.json"
         # sanitize chunk contents for JSON
         sanitized_chunk = [sanitize_project(p) for p in chunk]
 
         # Write to public data directory
-        filepath = PUBLIC_DATA_DIR / filename
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(sanitized_chunk, f, ensure_ascii=False, indent=2)
+        filepath = write_json_output(Path(filename), sanitized_chunk)
         size_mb = filepath.stat().st_size / 1024 / 1024
         print(f"  → {filename} ({len(chunk)} projects, {size_mb:.2f} MB)")
-
-        # Also write to external data repo if available (split-repo setup)
-        if DATA_REPO_AVAILABLE:
-            repo_filepath = DATA_REPO_DIR / filename
-            with open(repo_filepath, 'w', encoding='utf-8') as f:
-                json.dump(sanitized_chunk, f, ensure_ascii=False, indent=2)
 
     # Create metadata file
     total_amount = sum(p['total_amount'] for p in projects)
     municipalities = len(set(p['nis_code'] for p in projects))
 
     # Summarize projects by category (counts, sums, largest projects)
-    category_summaries = summarize_projects_by_category(projects, top_n=10)
+    category_summaries = summarize_projects_by_category(projects, top_n=CATEGORY_TOP_PROJECTS_LIMIT)
+    category_summaries = export_category_files(projects_sorted, category_summaries)
+    export_municipality_files(projects_sorted)
 
     # Normalize numeric types for JSON compatibility
     total_amount_native = float(total_amount)
@@ -603,46 +654,19 @@ def chunk_and_save(projects, chunk_size=2000):
         "municipalities": int(municipalities),
         "chunks": len(chunks),
         "chunk_size": chunk_size,
+        "category_top_projects_limit": CATEGORY_TOP_PROJECTS_LIMIT,
         "categories": category_summaries
     }
 
-    # Sanitize category_summaries numeric fields and ensure all nested data is JSON-serializable
-    def sanitize_value(val):
-        """Recursively sanitize values for JSON serialization."""
-        import numpy as _np
-        import pandas as _pd
-        
-        if val is None:
-            return None
-        if isinstance(val, dict):
-            return {k: sanitize_value(v) for k, v in val.items()}
-        if isinstance(val, (list, tuple)):
-            return [sanitize_value(item) for item in val]
-        if isinstance(val, (_np.integer, _np.floating)):
-            return float(val)
-        if isinstance(val, _np.ndarray):
-            return val.tolist()
-        if isinstance(val, _pd.Timestamp):
-            return str(val)
-        return val
-    
     for cat_id, cat in metadata['categories'].items():
         metadata['categories'][cat_id] = sanitize_value(cat)
 
     # Print a more informative category breakdown
-    print(f"\nCategory breakdown (top {10} largest projects shown per category):")
+    print(f"\nCategory breakdown (top {CATEGORY_TOP_PROJECTS_LIMIT} largest projects shown per category):")
     for cat_id, cat_data in sorted(metadata['categories'].items(), key=lambda x: x[1]['project_count'], reverse=True):
         print(f"  {cat_data['label']}: {cat_data['project_count']} projects, total €{cat_data['total_amount']:,.0f}")
 
-    metadata_file = PUBLIC_DATA_DIR / "projects_metadata.json"
-    with open(metadata_file, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, ensure_ascii=False, indent=2)
-
-    # Also write to external data repo if available
-    if DATA_REPO_AVAILABLE:
-        repo_metadata_file = DATA_REPO_DIR / "projects_metadata.json"
-        with open(repo_metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, ensure_ascii=False, indent=2)
+    write_json_output(Path("projects_metadata.json"), metadata)
 
     print(f"\n  → projects_metadata.json")
     print(f"\nMetadata:")

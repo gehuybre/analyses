@@ -35,28 +35,40 @@ export interface Project {
   categories: string[]
 }
 
+export interface CategoryProjectPreview {
+  ac_code: string
+  ac_short: string
+  ac_long?: string
+  ap_code?: string
+  ap_short?: string
+  ap_long?: string
+  bd_code?: string
+  bd_short?: string
+  bd_long?: string
+  municipality: string
+  nis_code: string
+  total_amount: number
+  amount_per_capita?: number
+  yearly_amounts: Record<string, number>
+  yearly_per_capita?: Record<string, number>
+  categories?: string[]
+}
+
 export interface CategoryMetadata {
   id: string
   label: string
   project_count: number
   total_amount: number
-  largest_projects: Array<{
-    ac_code: string
-    ac_short: string
-    ac_long?: string
-    ap_code?: string
-    ap_short?: string
-    ap_long?: string
-    bd_code?: string
-    bd_short?: string
-    bd_long?: string
-    municipality: string
-    nis_code: string
-    total_amount: number
-    amount_per_capita?: number
-    yearly_amounts: Record<string, number>
-    yearly_per_capita?: Record<string, number>
-  }>
+  data_file?: string
+  largest_projects: CategoryProjectPreview[]
+}
+
+export interface MunicipalityIndexEntry {
+  nis_code: string
+  municipality: string
+  file: string
+  project_count: number
+  total_amount: number
 }
 
 export interface ProjectMetadata {
@@ -65,6 +77,7 @@ export interface ProjectMetadata {
   municipalities: number
   chunks: number
   chunk_size: number
+  category_top_projects_limit?: number
   categories: {
     [key: string]: CategoryMetadata
   }

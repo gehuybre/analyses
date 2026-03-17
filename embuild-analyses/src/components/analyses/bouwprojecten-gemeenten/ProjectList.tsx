@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Project } from "@/types/project-types"
 import { ProjectCard } from "./ProjectCard"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,10 @@ const ITEMS_PER_PAGE = 50
 
 export function ProjectList({ projects, onProjectClick, loading }: ProjectListProps) {
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
+
+  useEffect(() => {
+    setDisplayCount(ITEMS_PER_PAGE)
+  }, [projects])
 
   const displayedProjects = projects.slice(0, displayCount)
   const hasMore = displayCount < projects.length

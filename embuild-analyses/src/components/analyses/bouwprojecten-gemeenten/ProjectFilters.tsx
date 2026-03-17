@@ -1,6 +1,12 @@
 "use client"
 
-import { ProjectFilters, ProjectMetadata, SortOption, Project } from "@/types/project-types"
+import { useEffect, useMemo, useState } from "react"
+import {
+  MunicipalityIndexEntry,
+  ProjectFilters,
+  ProjectMetadata,
+  SortOption,
+} from "@/types/project-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +19,6 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { X, Search, Check, ChevronsUpDown } from "lucide-react"
-import { useMemo, useState } from "react"
 import {
   Command,
   CommandEmpty,
@@ -29,7 +34,9 @@ interface ProjectFiltersComponentProps {
   filters: ProjectFilters
   setFilters: (filters: ProjectFilters) => void
   metadata: ProjectMetadata | null
-  projects: Project[]
+  municipalities: MunicipalityIndexEntry[]
+  categoryCounts: Record<string, number>
+  searchEnabled: boolean
   sortOption: SortOption
   setSortOption: (option: SortOption) => void
 }
@@ -38,82 +45,67 @@ export function ProjectFiltersComponent({
   filters,
   setFilters,
   metadata,
-  projects,
+  municipalities,
+  categoryCounts,
+  searchEnabled,
   sortOption,
   setSortOption,
 }: ProjectFiltersComponentProps) {
-  const [searchInput, setSearchInput] = useState("")
+  const [searchInput, setSearchInput] = useState(filters.searchQuery || "")
   const [muniOpen, setMuniOpen] = useState(false)
 
-  // Get unique municipalities with NIS codes from loaded projects
-  const municipalities = useMemo(() => {
-    const unique = Array.from(new Set(
-      projects.map(p => JSON.stringify({ nis_code: p.nis_code, name: p.municipality }))
-    )).map(str => JSON.parse(str) as { nis_code: string; name: string })
-    return unique.sort((a, b) => a.name.localeCompare(b.name))
-  }, [projects])
+  useEffect(() => {
+    setSearchInput(filters.searchQuery || "")
+  }, [filters.searchQuery])
 
-  // Calculate project counts per category for the selected municipality
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-
-    // Initialize with 0 for all categories from metadata
-    if (metadata) {
-      Object.keys(metadata.categories).forEach(id => {
-        counts[id] = 0
-      })
-    }
-
-    // Filter projects by NIS code if one is selected
-    const relevantProjects = filters.nis_code
-      ? projects.filter(p => p.nis_code === filters.nis_code)
-      : projects
-
-    // Count categories in relevant projects
-    relevantProjects.forEach(project => {
-      project.categories.forEach(catId => {
-        if (counts[catId] !== undefined) {
-          counts[catId]++
-        }
-      })
-    })
-
-    return counts
-  }, [projects, filters.nis_code, metadata])
+  const sortedMunicipalities = useMemo(
+    () => [...municipalities].sort((a, b) => a.municipality.localeCompare(b.municipality)),
+    [municipalities]
+  )
 
   const handleMunicipalityChange = (value: string) => {
     if (value === "all") {
-      const { nis_code, ...rest } = filters
-      setFilters(rest)
-    } else {
-      setFilters({ ...filters, nis_code: value })
+      const nextFilters = { ...filters }
+      delete nextFilters.nis_code
+      setFilters(nextFilters)
+      return
     }
+
+    setFilters({ ...filters, nis_code: value })
   }
 
   const handleCategoryToggle = (categoryId: string) => {
     const currentCategories = filters.categories || []
     const newCategories = currentCategories.includes(categoryId)
-      ? currentCategories.filter(c => c !== categoryId)
+      ? currentCategories.filter((currentCategory) => currentCategory !== categoryId)
       : [...currentCategories, categoryId]
 
     if (newCategories.length === 0) {
-      const { categories, ...rest } = filters
-      setFilters(rest)
-    } else {
-      setFilters({ ...filters, categories: newCategories })
+      const nextFilters = { ...filters }
+      delete nextFilters.categories
+      setFilters(nextFilters)
+      return
     }
+
+    setFilters({ ...filters, categories: newCategories })
   }
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Sanitize and limit search query to 200 characters
+  const handleSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+
+    if (!searchEnabled) {
+      return
+    }
+
     const sanitizedQuery = searchInput.trim().slice(0, 200)
     if (sanitizedQuery) {
       setFilters({ ...filters, searchQuery: sanitizedQuery })
-    } else {
-      const { searchQuery, ...rest } = filters
-      setFilters(rest)
+      return
     }
+
+    const nextFilters = { ...filters }
+    delete nextFilters.searchQuery
+    setFilters(nextFilters)
   }
 
   const handleReset = () => {
@@ -138,7 +130,6 @@ export function ProjectFiltersComponent({
         )}
       </div>
 
-      {/* Municipality and Sort */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="municipality">Gemeente</Label>
@@ -152,16 +143,17 @@ export function ProjectFiltersComponent({
                 id="municipality"
               >
                 {filters.nis_code
-                  ? municipalities.find(m => m.nis_code === filters.nis_code)?.name
+                  ? sortedMunicipalities.find((municipality) => municipality.nis_code === filters.nis_code)?.municipality
                   : "alle gemeenten"}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-              <Command filter={(value, search) => {
-                // Custom filter for case-insensitive searching
-                return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
-              }}>
+              <Command
+                filter={(value, search) => (
+                  value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+                )}
+              >
                 <CommandInput placeholder="Zoek gemeente..." />
                 <CommandList>
                   <CommandEmpty>geen gemeente gevonden.</CommandEmpty>
@@ -181,23 +173,22 @@ export function ProjectFiltersComponent({
                       />
                       Alle gemeenten
                     </CommandItem>
-                    {municipalities.map((muni) => (
+                    {sortedMunicipalities.map((municipality) => (
                       <CommandItem
-                        key={muni.nis_code}
-                        value={muni.name}
-                        onSelect={(currentValue) => {
-                          const nis_code = municipalities.find(m => m.name === currentValue)?.nis_code || currentValue
-                          handleMunicipalityChange(nis_code)
+                        key={municipality.nis_code}
+                        value={municipality.municipality}
+                        onSelect={() => {
+                          handleMunicipalityChange(municipality.nis_code)
                           setMuniOpen(false)
                         }}
                       >
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4",
-                            filters.nis_code === muni.nis_code ? "opacity-100" : "opacity-0"
+                            filters.nis_code === municipality.nis_code ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        {muni.name}
+                        {municipality.municipality}
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -209,7 +200,7 @@ export function ProjectFiltersComponent({
 
         <div>
           <Label htmlFor="sort">Sorteren</Label>
-          <Select value={sortOption} onValueChange={(v) => setSortOption(v as SortOption)}>
+          <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
             <SelectTrigger id="sort">
               <SelectValue />
             </SelectTrigger>
@@ -223,7 +214,6 @@ export function ProjectFiltersComponent({
         </div>
       </div>
 
-      {/* Categories */}
       {metadata && (
         <div>
           <Label className="mb-2 block">categorieën</Label>
@@ -232,25 +222,25 @@ export function ProjectFiltersComponent({
               .sort((a, b) => {
                 const countA = categoryCounts[a[0]] ?? 0
                 const countB = categoryCounts[b[0]] ?? 0
-                // Sort by current counts, then by label
                 if (countB !== countA) return countB - countA
                 return a[1].label.localeCompare(b[1].label)
               })
-              .map(([id, cat]) => {
-                const isActive = filters.categories?.includes(id)
-                const currentCount = categoryCounts[id] ?? 0
+              .map(([categoryId, category]) => {
+                const isActive = filters.categories?.includes(categoryId)
+                const currentCount = categoryCounts[categoryId] ?? 0
 
-                // Only show badge if count > 0 OR if it was already selected (to allow deselecting)
-                if (currentCount === 0 && !isActive) return null
+                if (currentCount === 0 && !isActive) {
+                  return null
+                }
 
                 return (
                   <Badge
-                    key={id}
+                    key={categoryId}
                     variant={isActive ? "default" : "outline"}
                     className="cursor-pointer hover:bg-primary/90"
-                    onClick={() => handleCategoryToggle(id)}
+                    onClick={() => handleCategoryToggle(categoryId)}
                   >
-                    {cat.label} ({currentCount})
+                    {category.label} ({currentCount})
                   </Badge>
                 )
               })}
@@ -258,31 +248,31 @@ export function ProjectFiltersComponent({
         </div>
       )}
 
-      {/* Active filters summary */}
       {hasActiveFilters && (
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground mb-2">actieve filters:</p>
           <div className="flex flex-wrap gap-2">
             {filters.nis_code && (
               <Badge variant="secondary">
-                Gemeente: {municipalities.find(m => m.nis_code === filters.nis_code)?.name}
+                Gemeente: {sortedMunicipalities.find((municipality) => municipality.nis_code === filters.nis_code)?.municipality}
                 <X
                   className="ml-1 h-3 w-3 cursor-pointer"
                   onClick={() => {
-                    const { nis_code, ...rest } = filters
-                    setFilters(rest)
+                    const nextFilters = { ...filters }
+                    delete nextFilters.nis_code
+                    setFilters(nextFilters)
                   }}
                 />
               </Badge>
             )}
-            {filters.categories?.map(catId => {
-              const cat = metadata?.categories[catId]
+            {filters.categories?.map((categoryId) => {
+              const category = metadata?.categories[categoryId]
               return (
-                <Badge key={catId} variant="secondary">
-                  {cat?.label}
+                <Badge key={categoryId} variant="secondary">
+                  {category?.label}
                   <X
                     className="ml-1 h-3 w-3 cursor-pointer"
-                    onClick={() => handleCategoryToggle(catId)}
+                    onClick={() => handleCategoryToggle(categoryId)}
                   />
                 </Badge>
               )
@@ -293,8 +283,9 @@ export function ProjectFiltersComponent({
                 <X
                   className="ml-1 h-3 w-3 cursor-pointer"
                   onClick={() => {
-                    const { searchQuery, ...rest } = filters
-                    setFilters(rest)
+                    const nextFilters = { ...filters }
+                    delete nextFilters.searchQuery
+                    setFilters(nextFilters)
                     setSearchInput("")
                   }}
                 />
@@ -304,24 +295,33 @@ export function ProjectFiltersComponent({
         </div>
       )}
 
-      {/* Search - moved to bottom and made smaller */}
       <form onSubmit={handleSearchSubmit} className="pt-4 border-t">
-        <Label htmlFor="search" className="text-sm mb-2 block">Zoeken in projectnamen en beschrijvingen</Label>
+        <Label htmlFor="search" className="text-sm mb-2 block">
+          Zoeken in geladen projectnamen en beschrijvingen
+        </Label>
         <div className="flex gap-2">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               id="search"
               type="text"
-              placeholder="Zoekterm..."
+              placeholder={searchEnabled ? "Zoekterm..." : "Kies eerst een gemeente of categorie"}
               value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={(event) => setSearchInput(event.target.value)}
               className="pl-9 h-9"
               maxLength={200}
+              disabled={!searchEnabled}
             />
           </div>
-          <Button type="submit" size="sm">Zoeken</Button>
+          <Button type="submit" size="sm" disabled={!searchEnabled}>
+            Zoeken
+          </Button>
         </div>
+        {!searchEnabled && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            De zoekfunctie werkt binnen de geselecteerde gemeente of categorie.
+          </p>
+        )}
       </form>
     </div>
   )
