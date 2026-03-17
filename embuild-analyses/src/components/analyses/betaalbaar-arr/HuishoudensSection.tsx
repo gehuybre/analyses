@@ -20,6 +20,7 @@ import {
   ComposedChart,
   Line,
   Cell,
+  ReferenceLine,
 } from "recharts"
 import {
   createAutoScaledFormatter,
@@ -29,6 +30,8 @@ import {
 interface HuishoudensSectionProps {
   data: MunicipalityData[]
 }
+
+const householdSizeKeys = ["1 persoon", "2 personen", "3 personen", "4+ personen"] as const
 
 const columns = [
   { key: "TX_REFNIS_NL", header: "Gemeente", format: "text" as const, sortable: true },
@@ -62,24 +65,8 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
     return data.find(d => d.CD_REFNIS === selectedHighlightMunicipality)?.TX_REFNIS_NL ?? null
   }, [data, selectedHighlightMunicipality])
 
-  const hasHouseholdData = data.some(d => d.HH_available)
-
-  if (!hasHouseholdData) {
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-semibold">Huishoudens - voorspelde toename 2025-2040</h2>
-        <Alert>
-          <InfoIcon className="h-4 w-4" />
-          <AlertDescription>
-            Geen huishoudensdata beschikbaar voor de geselecteerde selectie.
-            Huishoudensdata is momenteel alleen beschikbaar voor Vlaanderen.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
   const cleanData = data.filter(d => d.HH_available)
+  const hasHouseholdData = cleanData.length > 0
 
   // Map data for export
   const exportData = cleanData.map(d => ({
@@ -117,15 +104,24 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
   // Calculate stacked bar chart data (absolute growth by household size)
   const stackedBarData = useMemo(() => {
     return cleanData
-      .map(d => ({
-        name: d.TX_REFNIS_NL,
-        total: (d.hh_1_abs_toename ?? 0) + (d.hh_2_abs_toename ?? 0) +
-          (d.hh_3_abs_toename ?? 0) + (d["hh_4+_abs_toename"] ?? 0),
-        "1 persoon": d.hh_1_abs_toename ?? 0,
-        "2 personen": d.hh_2_abs_toename ?? 0,
-        "3 personen": d.hh_3_abs_toename ?? 0,
-        "4+ personen": d["hh_4+_abs_toename"] ?? 0,
-      }))
+      .map(d => {
+        const onePerson = d.hh_1_abs_toename ?? 0
+        const twoPersons = d.hh_2_abs_toename ?? 0
+        const threePersons = d.hh_3_abs_toename ?? 0
+        const fourPlusPersons = d["hh_4+_abs_toename"] ?? 0
+        const householdValues = [onePerson, twoPersons, threePersons, fourPlusPersons]
+
+        return {
+          name: d.TX_REFNIS_NL,
+          total: householdValues.reduce((sum, value) => sum + value, 0),
+          positiveTotal: householdValues.reduce((sum, value) => sum + Math.max(value, 0), 0),
+          negativeTotal: householdValues.reduce((sum, value) => sum + Math.min(value, 0), 0),
+          "1 persoon": onePerson,
+          "2 personen": twoPersons,
+          "3 personen": threePersons,
+          "4+ personen": fourPlusPersons,
+        }
+      })
       .sort((a, b) => b.total - a.total)
       .slice(0, 15) // Max 15 municipalities
   }, [cleanData])
@@ -143,10 +139,9 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
 
   const { formatter: stackedFormatter, scaleLabel: stackedScale } = useMemo(() => {
     const values = stackedBarData.flatMap(d => [
-      d["1 persoon"],
-      d["2 personen"],
-      d["3 personen"],
-      d["4+ personen"]
+      d.positiveTotal,
+      d.negativeTotal,
+      ...householdSizeKeys.map(key => d[key])
     ])
     return createAutoScaledFormatter(values, false)
   }, [stackedBarData])
@@ -155,6 +150,32 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
     createYAxisLabel('Absolute toename', stackedScale, false),
     [stackedScale]
   )
+
+  const stackedYAxisDomain = useMemo<[number, number]>(() => {
+    if (stackedBarData.length === 0) return [0, 0]
+
+    const minValue = Math.min(0, ...stackedBarData.map(d => d.negativeTotal))
+    const maxValue = Math.max(0, ...stackedBarData.map(d => d.positiveTotal))
+    const range = maxValue - minValue
+    const padding = range === 0 ? 1 : range * 0.05
+
+    return [minValue - (minValue < 0 ? padding : 0), maxValue + (maxValue > 0 ? padding : 0)]
+  }, [stackedBarData])
+
+  if (!hasHouseholdData) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-semibold">Huishoudens - voorspelde toename 2025-2040</h2>
+        <Alert>
+          <InfoIcon className="h-4 w-4" />
+          <AlertDescription>
+            Geen huishoudensdata beschikbaar voor de geselecteerde selectie.
+            Huishoudensdata is momenteel alleen beschikbaar voor Vlaanderen.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -250,10 +271,21 @@ export function HuishoudensSection({ data }: HuishoudensSectionProps) {
           <span className="font-bold">{stackedYAxisLabel.boldText}</span>
         </div>
         <ResponsiveContainer width="100%" height={400}>
-          <BarChart data={stackedBarData}>
+          <BarChart data={stackedBarData} stackOffset="sign">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 12 }} tickFormatter={stackedFormatter} />
+            <YAxis
+              tick={{ fontSize: 12 }}
+              tickFormatter={stackedFormatter}
+              domain={stackedYAxisDomain}
+            />
+            <ReferenceLine
+              y={0}
+              stroke="hsl(var(--foreground))"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              zIndex={1000}
+            />
             <Tooltip
               contentStyle={{
                 backgroundColor: '#ffffff',
