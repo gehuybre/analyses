@@ -13,7 +13,13 @@ type BuildVersionPayload = {
 function getVersionUrlCandidates(): string[] {
   const rawUrl = new URL("/version.json", window.location.origin).toString()
   const basePathUrl = new URL(getLocalPublicPath("/version.json"), window.location.origin).toString()
-  return Array.from(new Set([rawUrl, basePathUrl]))
+  const prefersBasePath =
+    window.location.hostname === "gehuybre.github.io" &&
+    window.location.pathname.startsWith("/analyses")
+
+  return prefersBasePath
+    ? Array.from(new Set([basePathUrl, rawUrl]))
+    : Array.from(new Set([rawUrl, basePathUrl]))
 }
 
 function buildReloadUrl(version: string): string {
