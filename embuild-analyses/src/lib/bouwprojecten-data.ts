@@ -1,6 +1,6 @@
 "use client"
 
-import { getDataPathCandidates } from "@/lib/path-utils"
+import { getDataPathCandidates, withDeployVersion } from "@/lib/path-utils"
 
 const jsonCache = new Map<string, Promise<unknown>>()
 const resolvedUrlCache = new Map<string, string>()
@@ -8,10 +8,11 @@ const resolvedUrlCache = new Map<string, string>()
 function getCandidateUrls(path: string): string[] {
   const cachedUrl = resolvedUrlCache.get(path)
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
-  const candidateUrls = getDataPathCandidates(path)
+  const candidateUrls = getDataPathCandidates(path).map(withDeployVersion)
+  const versionedNormalizedPath = withDeployVersion(normalizedPath)
   const orderedCandidateUrls = [
-    normalizedPath,
-    ...candidateUrls.filter((url) => url !== normalizedPath),
+    versionedNormalizedPath,
+    ...candidateUrls.filter((url) => url !== versionedNormalizedPath),
   ]
 
   if (!cachedUrl) {
@@ -26,7 +27,7 @@ async function loadBouwprojectenJson<T>(path: string): Promise<T> {
 
   for (const url of getCandidateUrls(path)) {
     try {
-      const response = await fetch(url, { cache: "force-cache" })
+      const response = await fetch(url)
       if (!response.ok) {
         failures.push(`${url} (${response.status})`)
         continue

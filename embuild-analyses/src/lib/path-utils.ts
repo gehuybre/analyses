@@ -2,6 +2,8 @@
  * Utility functions for handling paths with basePath support
  */
 
+const deployVersion = process.env.NEXT_PUBLIC_DEPLOY_VERSION || ""
+
 /**
  * Get the base path for the application.
  * In production (GitHub Pages), this is '/analyses'
@@ -76,6 +78,26 @@ export function getDataPathCandidates(path: string): string[] {
   const localRawPath = normalizedPath;
   const localBasePath = getLocalPublicPath(normalizedPath);
   return Array.from(new Set([primary, localRawPath, localBasePath]));
+}
+
+/**
+ * Append the current deploy version to a URL so stale browser caches cannot
+ * survive across releases while still allowing normal HTTP caching per release.
+ */
+export function withDeployVersion(url: string): string {
+  if (!deployVersion) {
+    return url
+  }
+
+  const baseOrigin = typeof window !== "undefined" ? window.location.origin : "https://example.invalid"
+  const parsedUrl = new URL(url, baseOrigin)
+  parsedUrl.searchParams.set("v", deployVersion)
+
+  if (/^https?:\/\//.test(url)) {
+    return parsedUrl.toString()
+  }
+
+  return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`
 }
 
 /**
