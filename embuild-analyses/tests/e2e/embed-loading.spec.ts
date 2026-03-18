@@ -48,7 +48,7 @@ test.describe('Embed Loading Tests', () => {
     },
   ];
 
-  testEmbeds.forEach(({ path, name, title }) => {
+  testEmbeds.forEach(({ path, name }) => {
     test(`should load ${name} embed successfully`, async ({ page }) => {
       // Capture console errors (filter out React hydration warnings)
       const consoleErrors: string[] = [];
@@ -111,6 +111,16 @@ test.describe('Embed Loading Tests', () => {
     const body = page.locator('body');
     await expect(body).toBeVisible();
     await expect(body).not.toBeEmpty();
+  });
+
+  test('should hide CSV and embed buttons on embed routes', async ({ page }) => {
+    const response = await page.goto('embed/vergunningen-goedkeuringen/renovatie/?view=chart');
+    expect(response?.status()).toBe(200);
+
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByRole('button', { name: /csv/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /embed/i })).toHaveCount(0);
   });
 
   test('should handle navigation timeout gracefully', async ({ page }) => {

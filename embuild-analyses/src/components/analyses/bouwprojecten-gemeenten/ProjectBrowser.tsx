@@ -21,6 +21,7 @@ import {
 import { Download, Code, Check, Copy } from "lucide-react"
 import { getBasePath } from "@/lib/path-utils"
 import { fetchBouwprojectenJson } from "@/lib/bouwprojecten-data"
+import { useIsEmbedRoute } from "@/lib/use-is-embed-route"
 
 interface ProjectScopeState {
   type: "none" | "municipality" | "category-top" | "category-full"
@@ -101,6 +102,7 @@ function dedupeProjects(projects: Project[]) {
 }
 
 export function ProjectBrowser() {
+  const isEmbedRoute = useIsEmbedRoute()
   const [projects, setProjects] = useState<Project[]>([])
   const [metadata, setMetadata] = useState<ProjectMetadata | null>(null)
   const [municipalities, setMunicipalities] = useState<MunicipalityIndexEntry[]>([])
@@ -647,55 +649,57 @@ export function ProjectBrowser() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleExportCSV}
-                  disabled={filteredAndSortedProjects.length === 0}
-                  variant="outline"
-                  size="sm"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">CSV</span>
-                </Button>
+              {!isEmbedRoute && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleExportCSV}
+                    disabled={filteredAndSortedProjects.length === 0}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span className="hidden sm:inline">CSV</span>
+                  </Button>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" title="Embed code">
-                      <Code className="h-4 w-4" />
-                      <span className="hidden sm:inline">Embed</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-96" align="end">
-                    <div className="space-y-3">
-                      <div className="font-medium text-sm">Embed deze projectbrowser</div>
-                      <p className="text-xs text-muted-foreground">
-                        Kopieer de onderstaande code om deze projectbrowser in je website te integreren.
-                      </p>
-                      <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">
-                        {getEmbedCode()}
-                      </pre>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full"
-                        onClick={copyEmbedCode}
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-4 w-4" />
-                            Gekopieerd!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-4 w-4" />
-                            Kopieer code
-                          </>
-                        )}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" title="Embed code">
+                        <Code className="h-4 w-4" />
+                        <span className="hidden sm:inline">Embed</span>
                       </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96" align="end">
+                      <div className="space-y-3">
+                        <div className="font-medium text-sm">Embed deze projectbrowser</div>
+                        <p className="text-xs text-muted-foreground">
+                          Kopieer de onderstaande code om deze projectbrowser in je website te integreren.
+                        </p>
+                        <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto whitespace-pre-wrap break-all">
+                          {getEmbedCode()}
+                        </pre>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full"
+                          onClick={copyEmbedCode}
+                        >
+                          {copied ? (
+                            <>
+                              <Check className="h-4 w-4" />
+                              Gekopieerd!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4" />
+                              Kopieer code
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
 
             {scopeState.type === "category-top" && metadata && (

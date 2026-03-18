@@ -11,6 +11,7 @@ import { Download, Code, Check, Copy } from "lucide-react"
 import { isEmbeddable, getEmbedConfig } from "@/lib/embed-config"
 import { getBasePath } from "@/lib/path-utils"
 import { useEmbedFilters } from "@/lib/stores/embed-filters-store"
+import { useIsEmbedRoute } from "@/lib/use-is-embed-route"
 
 type ExportData = {
   label: string
@@ -58,6 +59,7 @@ export function ExportButtons({
   embedParams,
 }: ExportButtonsProps) {
   const [copied, setCopied] = useState(false)
+  const isEmbedRoute = useIsEmbedRoute()
 
   const downloadCSV = useCallback(() => {
     if (!data?.length) return
@@ -234,7 +236,7 @@ export function ExportButtons({
       await navigator.clipboard.writeText(code)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
+    } catch {
       // Fallback for older browsers
       const textArea = document.createElement("textarea")
       textArea.value = code
@@ -246,6 +248,10 @@ export function ExportButtons({
       setTimeout(() => setCopied(false), 2000)
     }
   }, [getEmbedCode])
+
+  if (isEmbedRoute) {
+    return null
+  }
 
   return (
     <div className="flex items-center gap-2">
