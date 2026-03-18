@@ -109,7 +109,6 @@ export function ProjectBrowser() {
   const municipalityCacheRef = useRef<Map<string, Project[]>>(new Map())
   const categoryCacheRef = useRef<Map<string, Project[]>>(new Map())
   const requestIdRef = useRef(0)
-  const detailPanelRef = useRef<HTMLDivElement | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEmbeddedInIframe, setIsEmbeddedInIframe] = useState(false)
@@ -188,17 +187,6 @@ export function ProjectBrowser() {
   useEffect(() => {
     setSelectedProject(null)
   }, [dataSourceKey, filters.searchQuery])
-
-  useEffect(() => {
-    if (!isEmbeddedInIframe || !selectedProject) {
-      return
-    }
-
-    detailPanelRef.current?.scrollIntoView({
-      block: "start",
-      behavior: "smooth",
-    })
-  }, [isEmbeddedInIframe, selectedProject])
 
   useEffect(() => {
     if (!metadata || municipalities.length === 0) {
@@ -732,22 +720,24 @@ export function ProjectBrowser() {
             )}
           </div>
 
-          {selectedProject && isEmbeddedInIframe && (
-            <div ref={detailPanelRef}>
-              <ProjectDetailModal
-                project={selectedProject}
-                isOpen={true}
-                onClose={() => setSelectedProject(null)}
-                metadata={metadata}
-                embedded={true}
-              />
-            </div>
-          )}
-
           <ProjectList
             projects={filteredAndSortedProjects}
             onProjectClick={setSelectedProject}
             loading={loading}
+            selectedProject={isEmbeddedInIframe ? selectedProject : null}
+            expandedContent={
+              isEmbeddedInIframe && selectedProject
+                ? (
+                  <ProjectDetailModal
+                    project={selectedProject}
+                    isOpen={true}
+                    onClose={() => setSelectedProject(null)}
+                    metadata={metadata}
+                    embedded={true}
+                  />
+                )
+                : undefined
+            }
           />
         </>
       )}

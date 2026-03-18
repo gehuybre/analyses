@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { ReactNode, useEffect, useState } from "react"
 import { Project } from "@/types/project-types"
 import { ProjectCard } from "./ProjectCard"
 import { Button } from "@/components/ui/button"
@@ -9,11 +9,23 @@ interface ProjectListProps {
   projects: Project[]
   onProjectClick: (project: Project) => void
   loading?: boolean
+  selectedProject?: Project | null
+  expandedContent?: ReactNode
 }
 
 const ITEMS_PER_PAGE = 50
 
-export function ProjectList({ projects, onProjectClick, loading }: ProjectListProps) {
+function getProjectKey(project: Pick<Project, "nis_code" | "ac_code" | "ac_short">) {
+  return `${project.nis_code}||${project.ac_code}||${project.ac_short}`
+}
+
+export function ProjectList({
+  projects,
+  onProjectClick,
+  loading,
+  selectedProject = null,
+  expandedContent,
+}: ProjectListProps) {
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
 
   useEffect(() => {
@@ -49,13 +61,26 @@ export function ProjectList({ projects, onProjectClick, loading }: ProjectListPr
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {displayedProjects.map((project, idx) => (
-          <ProjectCard
-            key={`${project.nis_code}-${project.ac_code}-${idx}`}
-            project={project}
-            onClick={() => onProjectClick(project)}
-          />
-        ))}
+        {displayedProjects.map((project, idx) => {
+          const isExpanded = selectedProject
+            ? getProjectKey(project) === getProjectKey(selectedProject)
+            : false
+
+          return (
+            <div key={`${project.nis_code}-${project.ac_code}-${idx}`} className="space-y-3">
+              <ProjectCard
+                project={project}
+                onClick={() => onProjectClick(project)}
+              />
+
+              {isExpanded && expandedContent && (
+                <div className="md:pl-6">
+                  {expandedContent}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {hasMore && (
