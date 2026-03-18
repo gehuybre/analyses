@@ -14,6 +14,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
     NEXT_PUBLIC_DATA_BASE_URL: process.env.NEXT_PUBLIC_DATA_BASE_URL || '',
+    NEXT_PUBLIC_DEPLOY_VERSION: process.env.NEXT_PUBLIC_DEPLOY_VERSION || '',
   },
   webpack: (config) => {
     config.resolve.alias = {

@@ -23,6 +23,7 @@ jobs:
     env:
       NEXT_PUBLIC_BASE_PATH: /analyses
       NEXT_PUBLIC_DATA_BASE_URL: https://gehuybre.github.io/data
+      NEXT_PUBLIC_DEPLOY_VERSION: ${{ github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

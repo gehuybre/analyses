@@ -3,6 +3,7 @@ import { Inter, Roboto_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { EmbedParentResizeListener } from "@/components/EmbedParentResizeListener";
+import { DeployVersionGuard } from "@/components/DeployVersionGuard";
 
 const geistSans = Inter({
   variable: "--font-geist-sans",
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
 
 const dataBaseUrl = process.env.NEXT_PUBLIC_DATA_BASE_URL ?? "";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const deployVersion = process.env.NEXT_PUBLIC_DEPLOY_VERSION ?? "";
 
 export default function RootLayout({
   children,
@@ -35,6 +37,7 @@ export default function RootLayout({
       if (!window.process.env.NODE_ENV) window.process.env.NODE_ENV = "production";
       if (!window.process.env.NEXT_PUBLIC_DATA_BASE_URL) window.process.env.NEXT_PUBLIC_DATA_BASE_URL = ${JSON.stringify(dataBaseUrl)};
       if (!window.process.env.NEXT_PUBLIC_BASE_PATH) window.process.env.NEXT_PUBLIC_BASE_PATH = ${JSON.stringify(basePath)};
+      if (!window.process.env.NEXT_PUBLIC_DEPLOY_VERSION) window.process.env.NEXT_PUBLIC_DEPLOY_VERSION = ${JSON.stringify(deployVersion)};
     })();
   `;
 
@@ -44,6 +47,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Script id="process-env-polyfill" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: processEnvScript }} />
+        <DeployVersionGuard />
         <EmbedParentResizeListener />
         {children}
       </body>
