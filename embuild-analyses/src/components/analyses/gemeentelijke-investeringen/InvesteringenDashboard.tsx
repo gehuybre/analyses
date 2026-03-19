@@ -3,6 +3,7 @@
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { InvesteringenBVSection } from "./InvesteringenBVSection"
+import { InvesteringenBVIndexedSection } from "./InvesteringenBVIndexedSection"
 import { InvesteringenBVDifferenceSection } from "./InvesteringenBVDifferenceSection"
 import { InvesteringenBVTopFieldsSection } from "./InvesteringenBVTopFieldsSection"
 import { InvesteringenREKSection } from "./InvesteringenREKSection"
@@ -43,6 +44,12 @@ export function InvesteringenDashboard() {
 
       <div id="investments-bv" className="scroll-mt-20">
         <InvesteringenBVSection />
+      </div>
+
+      <div className="border-t pt-16" id="investments-bv-indexed">
+        <DeferredSection label="Geindexeerde investeringen laden..." minHeightClassName="min-h-[280px]">
+          <InvesteringenBVIndexedSection />
+        </DeferredSection>
       </div>
 
       <div className="border-t pt-16" id="investments-bv-difference">

@@ -8,7 +8,6 @@
  */
 
 import { validateEmbedPath } from "./embed-path-validation"
-import { getAnalysisConstraints } from "./embed-data-constraints"
 import type { EmbedDataConstraints } from "./embed-data-constraints"
 import type { KnownMetricKey } from "./embed-types"
 
@@ -318,6 +317,12 @@ export const EMBED_CONFIGS: AnalysisEmbedConfig[] = [
         type: "custom",
         title: "Investeringen per beleidsdomein",
         component: "InvesteringenEmbed",
+        height: 700,
+      },
+      "investments-bv-indexed": {
+        type: "custom",
+        title: "Geindexeerde investeringsbedragen",
+        component: "InvesteringenBVIndexedEmbed",
         height: 700,
       },
       "investments-bv-top-fields": {

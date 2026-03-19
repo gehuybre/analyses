@@ -10,6 +10,11 @@ inputs:
     type: file
     schema: Four Excel files with municipal investment data from Flemish Government BBC-DR system
     required: true
+  - name: CPI Input
+    from: embuild-analyses/analyses/gemeentelijke-investeringen/data/CPI All base years.txt
+    type: file
+    schema: Statbel CPI All base years monthly time series (downloaded automatically if absent)
+    required: false
 outputs:
   - name: Investment Results
     to: embuild-analyses/analyses/gemeentelijke-investeringen/results/
@@ -77,6 +82,9 @@ Each file contains:
 **BV (Beleidsdomein) Data:**
 - `bv_lookups.json`: Lookup tables for BV_domein, BV_subdomein, Beleidsveld, and municipalities
 - `bv_vlaanderen_data.json`: Aggregated Vlaanderen-level totals per rapportjaar
+- `bv_indexed_municipality_totals.json`: Geindexeerde totalen per Vlaamse gemeente en rapportjaar
+- `bv_indexed_vlaanderen_totals.json`: Geindexeerde Vlaanderen-totalen per rapportjaar
+- `bv_indexation_metadata.json`: CPI-methodiek, referentiemaanden en indexatiefactoren
 - `bv_municipality_data_chunk_*.json`: Municipality-level data split into chunks (5000 records each)
 
 **REK (Economische Rekening) Data:**
@@ -109,8 +117,9 @@ Each file contains:
 4. **Validation**: Cross-check consistency between Beleidsveld and Kostenpost totals (warns if >1% discrepancy)
 5. **Truncation Detection**: Calculate `is_kostenpost_truncated` flag based on municipality coverage ratio
 6. **Aggregate**: Generate Vlaanderen-level time series by summing municipality data and recalculating per capita metrics
-7. **Filter Latest**: Extract latest year data for map visualizations
-8. **Write Outputs**: Serialize to JSON with proper formatting and update metadata
+7. **Index totals**: Convert 2014 and 2020 totals to prijspeil februari 2026 using Statbel CPI midpoint months (januari 2017 and januari 2023)
+8. **Filter Latest**: Extract latest year data for map visualizations
+9. **Write Outputs**: Serialize to JSON with proper formatting and update metadata
 
 ## Data Quality Notes
 ### 1. process_investments.py

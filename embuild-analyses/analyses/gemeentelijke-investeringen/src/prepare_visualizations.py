@@ -9,7 +9,10 @@ Creates aggregated JSON files for the dashboard:
 import pandas as pd
 import json
 import numpy as np
+import subprocess
+import tempfile
 from pathlib import Path
+from zipfile import ZipFile
 
 # Load NIS municipality lookups
 SHARED_DATA_DIR = Path(__file__).parent.parent.parent.parent / 'shared-data'
@@ -25,6 +28,29 @@ RESULTS_DIR = PUBLIC_DATA_DIR # Use public dir for JSON outputs
 RESULTS_INTERNAL_DIR = SCRIPT_DIR.parent / 'results'
 INPUT_BV = RESULTS_INTERNAL_DIR / 'investments_bv.parquet'
 INPUT_REK = RESULTS_INTERNAL_DIR / 'investments_rek.parquet'
+INPUT_CPI = SCRIPT_DIR.parent / 'data' / 'CPI All base years.txt'
+CPI_SOURCE_URL = 'https://statbel.fgov.be/sites/default/files/files/opendata/Consumptieprijsindex%20en%20gezondheidsindex/CPI%20All%20base%20years.zip'
+
+CPI_BASE_YEAR = 2025
+CPI_REFERENCE_PERIOD = (2026, 2)
+CPI_INDEX_PERIODS = {
+    2014: (2017, 1),
+    2020: (2023, 1),
+}
+CPI_MONTH_NAMES_NL = {
+    1: 'januari',
+    2: 'februari',
+    3: 'maart',
+    4: 'april',
+    5: 'mei',
+    6: 'juni',
+    7: 'juli',
+    8: 'augustus',
+    9: 'september',
+    10: 'oktober',
+    11: 'november',
+    12: 'december',
+}
 
 class NumpyEncoder(json.JSONEncoder):
     """JSON encoder for numpy types."""
@@ -80,6 +106,118 @@ def save_json(data, filename, chunk_size=None):
     size_mb = output_path.stat().st_size / 1024 / 1024
     print(f"  → {filename} ({size_mb:.2f} MB)")
     return 1
+
+def format_month_label(year, month):
+    """Format a year/month pair as a Dutch month label."""
+    return f"{CPI_MONTH_NAMES_NL[int(month)]} {int(year)}"
+
+def ensure_cpi_file():
+    """Download and extract the CPI source file when it is not available locally."""
+    if INPUT_CPI.exists():
+        return
+
+    print(f"Downloading CPI data from {CPI_SOURCE_URL}")
+    INPUT_CPI.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_file:
+        temp_zip = Path(temp_file.name)
+
+    try:
+        subprocess.run(
+            ['curl', '-fsSL', CPI_SOURCE_URL, '-o', str(temp_zip)],
+            check=True,
+        )
+
+        with ZipFile(temp_zip) as archive:
+            member_name = next(
+                (name for name in archive.namelist() if name.endswith('CPI All base years.txt')),
+                None
+            )
+            if member_name is None:
+                raise FileNotFoundError('CPI All base years.txt not found in Statbel archive')
+            INPUT_CPI.write_bytes(archive.read(member_name))
+    finally:
+        if temp_zip.exists():
+            temp_zip.unlink()
+
+def load_cpi_lookup():
+    """Load CPI values keyed by (year, month) using the 2025 base-year series."""
+    ensure_cpi_file()
+    cpi_df = pd.read_csv(INPUT_CPI, sep='|', encoding='utf-8-sig')
+    cpi_series = (
+        cpi_df[cpi_df['NM_BASE_YR'] == CPI_BASE_YEAR][['NM_YR', 'NM_MTH', 'MS_CPI_IDX']]
+        .rename(columns={'NM_YR': 'Year', 'NM_MTH': 'Month', 'MS_CPI_IDX': 'CPI'})
+        .copy()
+    )
+
+    cpi_series['Year'] = cpi_series['Year'].astype(int)
+    cpi_series['Month'] = cpi_series['Month'].astype(int)
+    cpi_series['CPI'] = cpi_series['CPI'].astype(float)
+
+    return {
+        (int(row.Year), int(row.Month)): float(row.CPI)
+        for row in cpi_series.itertuples(index=False)
+    }
+
+def build_bv_indexation_metadata():
+    """Build CPI-based indexation factors for the BV totals section."""
+    cpi_lookup = load_cpi_lookup()
+    reference_year, reference_month = CPI_REFERENCE_PERIOD
+    reference_cpi = cpi_lookup[(reference_year, reference_month)]
+
+    factors = {2026: 1.0}
+    periods = {}
+
+    for rapportjaar, (source_year, source_month) in CPI_INDEX_PERIODS.items():
+        source_cpi = cpi_lookup[(source_year, source_month)]
+        factor = reference_cpi / source_cpi
+        factors[rapportjaar] = factor
+        periods[str(rapportjaar)] = {
+            'source_period': f'{source_year}-{source_month:02d}',
+            'source_label': format_month_label(source_year, source_month),
+            'source_cpi': round(source_cpi, 2),
+            'reference_period': f'{reference_year}-{reference_month:02d}',
+            'reference_label': format_month_label(reference_year, reference_month),
+            'reference_cpi': round(reference_cpi, 2),
+            'factor': factor,
+        }
+
+    periods['2026'] = {
+        'source_period': f'{reference_year}-{reference_month:02d}',
+        'source_label': format_month_label(reference_year, reference_month),
+        'source_cpi': round(reference_cpi, 2),
+        'reference_period': f'{reference_year}-{reference_month:02d}',
+        'reference_label': format_month_label(reference_year, reference_month),
+        'reference_cpi': round(reference_cpi, 2),
+        'factor': 1.0,
+    }
+
+    metadata = {
+        'source': 'Statbel CPI All base years',
+        'source_file': INPUT_CPI.name,
+        'source_url': CPI_SOURCE_URL,
+        'cpi_base_year': CPI_BASE_YEAR,
+        'price_level_period': f'{reference_year}-{reference_month:02d}',
+        'price_level_label': format_month_label(reference_year, reference_month),
+        'reference_cpi': round(reference_cpi, 2),
+        'midpoint_note': (
+            'Omdat elke legislatuur zes jaar telt en dus geen unieke middenmaand heeft, '
+            'gebruiken we de eerste maand na het halfwegpunt: januari 2017 voor 2014-2019 '
+            'en januari 2023 voor 2020-2025.'
+        ),
+        'periods': periods,
+    }
+    return metadata, factors
+
+def apply_rapportjaar_indexation(df, factors, value_cols=('Totaal', 'Per_inwoner')):
+    """Apply CPI factors per rapportjaar to numeric value columns."""
+    indexed_df = df.copy()
+    indexed_df['Indexatiefactor'] = indexed_df['Rapportjaar'].map(factors).fillna(1.0)
+
+    for col in value_cols:
+        indexed_df[col] = indexed_df[col] * indexed_df['Indexatiefactor']
+
+    return indexed_df
 
 # NIS 2025 Fusions mapping (Sources -> Target)
 NIS_MERGERS_LOOKUP = {
@@ -271,6 +409,30 @@ def prepare_bv_data():
         for nis_code, group in domain_summary_df.groupby('NIS_code', sort=True)
     }
 
+    municipality_totals_df = (
+        domain_summary_df
+        .groupby(['NIS_code', 'Rapportjaar'], dropna=False)[['Totaal', 'Per_inwoner']]
+        .sum()
+        .reset_index()
+        .sort_values(['NIS_code', 'Rapportjaar'])
+    )
+
+    indexation_metadata, indexation_factors = build_bv_indexation_metadata()
+    indexed_municipality_totals_df = (
+        apply_rapportjaar_indexation(municipality_totals_df, indexation_factors)
+        .drop(columns=['Indexatiefactor'])
+        .sort_values(['NIS_code', 'Rapportjaar'])
+        .reset_index(drop=True)
+    )
+
+    indexed_vlaanderen_totals_df = (
+        indexed_municipality_totals_df
+        .groupby(['Rapportjaar'], dropna=False)[['Totaal', 'Per_inwoner']]
+        .agg({'Totaal': 'sum', 'Per_inwoner': 'mean'})
+        .reset_index()
+        .sort_values(['Rapportjaar'])
+    )
+
     # Vlaanderen totals (sum across all municipalities)
     vlaanderen_totals = df_agg.groupby(['Rapportjaar', 'BV_domein', 'BV_subdomein', 'Beleidsveld'], dropna=False)[['Totaal', 'Per_inwoner']].sum().reset_index()
     vlaanderen_data = vlaanderen_totals.to_dict('records')
@@ -281,6 +443,9 @@ def prepare_bv_data():
         'municipality_data': muni_data,
         'domain_summary': domain_summary,
         'domain_summary_by_municipality': domain_summary_by_municipality,
+        'indexed_municipality_totals': indexed_municipality_totals_df.to_dict('records'),
+        'indexed_vlaanderen_totals': indexed_vlaanderen_totals_df.to_dict('records'),
+        'indexation_metadata': indexation_metadata,
         'vlaanderen_data': vlaanderen_data,
     }
 
@@ -341,6 +506,12 @@ def main():
     for nis_code, records in bv_results['domain_summary_by_municipality'].items():
         save_json(records, Path('bv_domain_municipality') / f'{nis_code}.json')
     save_json(bv_results['vlaanderen_data'], 'bv_vlaanderen_data.json')
+    save_json(bv_results['indexed_municipality_totals'], 'bv_indexed_municipality_totals.json')
+    save_json(bv_results['indexed_municipality_totals'], RESULTS_INTERNAL_DIR / 'bv_indexed_municipality_totals.json')
+    save_json(bv_results['indexed_vlaanderen_totals'], 'bv_indexed_vlaanderen_totals.json')
+    save_json(bv_results['indexed_vlaanderen_totals'], RESULTS_INTERNAL_DIR / 'bv_indexed_vlaanderen_totals.json')
+    save_json(bv_results['indexation_metadata'], 'bv_indexation_metadata.json')
+    save_json(bv_results['indexation_metadata'], RESULTS_INTERNAL_DIR / 'bv_indexation_metadata.json')
 
     # Prepare REK data
     rek_results = prepare_rek_data()
@@ -365,7 +536,10 @@ def main():
         'rek_alg_rekenings': len(rek_results['lookups']['alg_rekenings']),
         'bv_chunks': bv_chunks,
         'rek_chunks': rek_chunks,
-        'chunk_size': chunk_size
+        'chunk_size': chunk_size,
+        'bv_index_price_level_period': bv_results['indexation_metadata']['price_level_period'],
+        'bv_index_price_level_label': bv_results['indexation_metadata']['price_level_label'],
+        'bv_index_cpi_base_year': bv_results['indexation_metadata']['cpi_base_year'],
     }
     save_json(metadata, 'metadata.json')
 

@@ -11,6 +11,7 @@ import { EpcLabelverdelingEmbed } from "@/components/analyses/epc-labelverdeling
 import { VergunningenAanvragenEmbed } from "@/components/analyses/vergunningen-aanvragen/VergunningenAanvragenEmbed"
 import { GebouwenparkEmbed } from "@/components/analyses/gebouwenpark/GebouwenparkEmbed"
 import { InvesteringenBVSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVSection"
+import { InvesteringenBVIndexedSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVIndexedSection"
 import { InvesteringenBVTopFieldsSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVTopFieldsSection"
 import { InvesteringenBVCategorySection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVCategorySection"
 import { InvesteringenBVDifferenceSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVDifferenceSection"
@@ -608,6 +609,37 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
         <div className="p-8 text-center">
           <p className="text-muted-foreground">
             Ongeldige investeringen-sectie: {section}
+          </p>
+        </div>
+      )
+    }
+
+    if (config.component === "InvesteringenBVIndexedEmbed") {
+      const validSections = getValidSections(slug)
+      if (!validSections.includes(section)) {
+        return (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">
+              Ongeldige sectie: {section}. Geldige opties: {validSections.join(", ")}
+            </p>
+          </div>
+        )
+      }
+
+      if (section === "investments-bv-indexed") {
+        return (
+          <InvesteringenBVIndexedSection
+            viewType={urlParams.view}
+            metric={urlParams.metric}
+            municipality={urlParams.municipality}
+          />
+        )
+      }
+
+      return (
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">
+            Ongeldige geindexeerde investeringen-sectie: {section}
           </p>
         </div>
       )

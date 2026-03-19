@@ -7,6 +7,11 @@ De data komt van gemeentelijke meerjarenplannen voor drie legislaturen:
 - **2020-2025**: Rapportjaar 2020 (boekjaren 2020-2027)
 - **2026-2031**: Rapportjaar 2026 (boekjaren 2026-2033)
 
+Voor de geindexeerde totalen wordt daarnaast de **Statbel CPI All base years**-reeks gebruikt:
+- **Bestand**: `data/CPI All base years.txt`
+- **Bron**: https://statbel.fgov.be/sites/default/files/files/opendata/Consumptieprijsindex%20en%20gezondheidsindex/CPI%20All%20base%20years.zip
+- **Fallback**: als het bestand lokaal ontbreekt, downloadt `prepare_visualizations.py` het automatisch
+
 ## Data Indeling
 
 Er zijn twee classificatiesystemen:
@@ -47,6 +52,17 @@ Het blogbericht moet twee hoofdsecties bevatten:
   - X-as: Rapportjaar (2014, 2020, 2026)
   - Y-as: Totale uitgave of uitgave per inwoner
   - Per lijn: 1 gemeente
+
+### Extra Sectie: Geindexeerde investeringsbedragen
+- **Filters**: Gemeente
+- **Visualisatie**: Totaal van alle BV-domeinen samen, zonder beleidsdomein-opdeling
+  - X-as: Rapportjaar (2014, 2020, 2026)
+  - Y-as: Totale uitgave of uitgave per inwoner
+  - Geen kaart
+- **Indexatiemethode**:
+  - prijspeil: februari 2026
+  - 2014-2019: CPI van januari 2017
+  - 2020-2025: CPI van januari 2023
 
 ### Sectie 2: Per Economische Rekening (REK)
 - **Filters**: Niveau_3 → Alg_rekening (hierarchisch)
