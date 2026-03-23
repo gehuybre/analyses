@@ -319,17 +319,23 @@ export function InvesteringenBVSection({
   const chartData = useMemo(() => {
     if (geoSelection.type === 'all') {
       const summaryDomain = selectedDomain || '__all__'
-      return aggregateSummary
+      const byYear: Record<number, { Rapportjaar: number; value: number }> = {}
+
+      // Normalized labels such as "Andere" can combine multiple raw BV domeinen.
+      aggregateSummary
         .filter((record) => (
           summaryDomain === '__all__'
             ? record.BV_domein === '__all__'
             : normalizeBvDomainLabel(record.BV_domein) === summaryDomain
         ))
-        .map((record) => ({
-          Rapportjaar: record.Rapportjaar,
-          value: record[selectedMetric],
-        }))
-        .sort((a, b) => a.Rapportjaar - b.Rapportjaar)
+        .forEach((record) => {
+          if (!byYear[record.Rapportjaar]) {
+            byYear[record.Rapportjaar] = { Rapportjaar: record.Rapportjaar, value: 0 }
+          }
+          byYear[record.Rapportjaar].value += record[selectedMetric]
+        })
+
+      return Object.values(byYear).sort((a, b) => a.Rapportjaar - b.Rapportjaar)
     }
 
     if (selectedMunicipalityChartData.length === 0) {
