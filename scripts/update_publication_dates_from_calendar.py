@@ -20,6 +20,7 @@ CALENDAR_URL = "https://statbel.fgov.be/nl/calendar"
 ROW_RE = re.compile(r"<tr>.*?</tr>", re.DOTALL)
 TIME_RE = re.compile(r'<time[^>]*datetime="([^"]+)"')
 HREF_RE = re.compile(r'<a[^>]*href="([^"]+)"')
+FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 
 
 def normalize_url(url: str) -> str:
@@ -57,14 +58,10 @@ def parse_calendar(html: str) -> dict[str, str]:
 
 
 def extract_frontmatter(content: str) -> tuple[str, str] | None:
-    if not content.startswith("---"):
+    match = FRONTMATTER_RE.match(content)
+    if not match:
         return None
-    end_marker = content.find("---", 3)
-    if end_marker == -1:
-        return None
-    frontmatter = content[3:end_marker]
-    rest = content[end_marker:]
-    return frontmatter, rest
+    return match.group(1), content[match.end():]
 
 
 def parse_source_url(frontmatter: str) -> str | None:
@@ -107,7 +104,7 @@ def update_mdx_frontmatter(mdx_path: Path, publication_date: str, dry_run: bool)
         else:
             new_frontmatter = frontmatter.rstrip("\n") + f"\nsourcePublicationDate: {publication_date}\n"
 
-    new_content = "---" + new_frontmatter + rest
+    new_content = f"---\n{new_frontmatter.rstrip()}\n---\n{rest.lstrip()}"
     if dry_run:
         return True
     mdx_path.write_text(new_content, encoding="utf-8")

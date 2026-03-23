@@ -49,43 +49,16 @@ jobs:
           pip install pandas requests
 
       - name: Check remote metadata and local outputs
+        # Generated results are not tracked in the analyses repo, so manual runs should force processing.
         id: check_remote
         run: |
           set -euo pipefail
 
-          missing_required=false
-          required_files=(
-            "${ANALYSIS_ROOT}/results/data_quarterly.json"
-            "${ANALYSIS_ROOT}/results/data_monthly.json"
-            "${ANALYSIS_ROOT}/results/municipalities.json"
-            "${ANALYSIS_ROOT}/results/yearly_index.json"
-            "${ANALYSIS_ROOT}/results/municipality_index.json"
-            "embuild-analyses/public/data/vergunningen-goedkeuringen/data_quarterly.json"
-            "embuild-analyses/public/data/vergunningen-goedkeuringen/data_monthly.json"
-            "embuild-analyses/public/data/vergunningen-goedkeuringen/municipalities.json"
-            "embuild-analyses/public/data/vergunningen-goedkeuringen/yearly_index.json"
-            "embuild-analyses/public/data/vergunningen-goedkeuringen/municipality_index.json"
-          )
-
-          for path in "${required_files[@]}"; do
-            if [ ! -f "${path}" ]; then
-              echo "Missing required output: ${path}"
-              missing_required=true
-            fi
-          done
-
-          check_non_empty_dir() {
-            local dir_path="$1"
-            if [ ! -d "${dir_path}" ] || [ -z "$(find "${dir_path}" -mindepth 1 -type f -print -quit)" ]; then
-              echo "Missing generated files in: ${dir_path}"
-              missing_required=true
-            fi
-          }
-
-          check_non_empty_dir "${ANALYSIS_ROOT}/results/yearly"
-          check_non_empty_dir "${ANALYSIS_ROOT}/results/municipality"
-          check_non_empty_dir "embuild-analyses/public/data/vergunningen-goedkeuringen/yearly"
-          check_non_empty_dir "embuild-analyses/public/data/vergunningen-goedkeuringen/municipality"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            echo "Manual dispatch forces a fresh download and publish."
+            exit 0
+          fi
 
           mkdir -p "$(dirname "${META_FILE}")"
           headers="$(curl -sI "${INPUT_URL}" || true)"
@@ -97,9 +70,9 @@ jobs:
           rc=$?
           set -e
 
-          if [ "${rc}" -eq 2 ] && [ "${missing_required}" = "false" ]; then
+          if [ "${rc}" -eq 2 ]; then
             echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "No remote change detected and all required outputs exist; skipping."
+            echo "No remote change detected; skipping."
             exit 0
           fi
 
@@ -163,7 +136,8 @@ jobs:
         if: steps.check_remote.outputs.changed == 'true'
         run: |
           set -euo pipefail
-          python scripts/update_publication_date.py "${ANALYSIS_SLUG}" "${PUBLICATION_PAGE_URL}"
+          python scripts/update_publication_date.py "${ANALYSIS_SLUG}" "${PUBLICATION_PAGE_URL}" --sync-date-field
+          python scripts/update_vergunningen_goedkeuringen_content.py
 
       - name: Commit and push analyses changes
         if: steps.check_remote.outputs.changed == 'true'
@@ -172,8 +146,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add "${ANALYSIS_ROOT}/results/"
-          git add "embuild-analyses/public/data/vergunningen-goedkeuringen/"
           git add "${ANALYSIS_ROOT}/data/.remote_metadata.json"
           git add "${ANALYSIS_ROOT}/content.mdx"
 
