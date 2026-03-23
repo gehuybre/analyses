@@ -242,17 +242,25 @@ export function InvesteringenBVCategorySection() {
         .sort((a, b) => b.value - a.value) as DomainData[]
     }
 
-    return aggregateSummary
+    const byDomain: Record<string, { label: string; value: number }> = {}
+
+    aggregateSummary
       .filter((record) => record.Rapportjaar === selectedYear && record.BV_domein !== '__all__')
-      .map((record) => {
+      .forEach((record) => {
         const label = normalizeBvDomainLabel(record.BV_domein)
-        return {
-          label,
-          value: record[selectedMetric],
-          count: 1,
-          subdomainLabels: subdomainLabelsByDomain.get(label) ?? [],
+        if (!byDomain[label]) {
+          byDomain[label] = { label, value: 0 }
         }
+        byDomain[label].value += record[selectedMetric]
       })
+
+    return Object.values(byDomain)
+      .map((domain) => ({
+        label: domain.label,
+        value: domain.value,
+        count: 1,
+        subdomainLabels: subdomainLabelsByDomain.get(domain.label) ?? [],
+      }))
       .sort((a, b) => b.value - a.value) as DomainData[]
   }, [lookups, aggregateSummary, selectedMunicipalitySummary, selectedYear, geoSelection, selectedMetric, subdomainLabelsByDomain])
 
@@ -266,11 +274,16 @@ export function InvesteringenBVCategorySection() {
       let globalMax = 1
 
       years.forEach((year) => {
-        const values = selectedMunicipalitySummary.records
-          .filter((record) => record.Rapportjaar === year && record.NIS_code === geoSelection.code)
-          .map((record) => record[selectedMetric])
+        const byDomain: Record<string, number> = {}
 
-        const yearMax = Math.max(...values, 1)
+        selectedMunicipalitySummary.records
+          .filter((record) => record.Rapportjaar === year && record.NIS_code === geoSelection.code)
+          .forEach((record) => {
+            const label = normalizeBvDomainLabel(record.BV_domein)
+            byDomain[label] = (byDomain[label] || 0) + record[selectedMetric]
+          })
+
+        const yearMax = Math.max(...Object.values(byDomain), 1)
         globalMax = Math.max(globalMax, yearMax)
       })
       return globalMax
@@ -280,10 +293,16 @@ export function InvesteringenBVCategorySection() {
     let globalMax = 1
 
     years.forEach((year) => {
-      const values = aggregateSummary
+      const byDomain: Record<string, number> = {}
+
+      aggregateSummary
         .filter((record) => record.Rapportjaar === year && record.BV_domein !== '__all__')
-        .map((record) => record[selectedMetric])
-      const yearMax = Math.max(...values, 1)
+        .forEach((record) => {
+          const label = normalizeBvDomainLabel(record.BV_domein)
+          byDomain[label] = (byDomain[label] || 0) + record[selectedMetric]
+        })
+
+      const yearMax = Math.max(...Object.values(byDomain), 1)
       globalMax = Math.max(globalMax, yearMax)
     })
 
