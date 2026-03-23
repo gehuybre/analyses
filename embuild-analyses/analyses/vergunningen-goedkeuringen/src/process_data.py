@@ -1,7 +1,7 @@
 import pandas as pd
 import json
 from pathlib import Path
-import math
+import shutil
 
 # Configuration
 import os
@@ -18,6 +18,40 @@ OUTPUT_MONTHLY_FILE = RESULTS_DIR / "data_monthly.json"
 OUTPUT_MUNICIPALITIES_FILE = RESULTS_DIR / "municipalities.json"
 # Also write copies to the public folder so the Next.js frontend can fetch them directly
 OUTPUT_PUBLIC_DIR = BASE_DIR.parent.parent / "public" / "data" / "vergunningen-goedkeuringen"
+
+
+def reset_generated_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def resolve_downloaded_input(download_path: Path, zipfile_module) -> Path:
+    if not zipfile_module.is_zipfile(download_path):
+        print(
+            f"Downloaded file {download_path} is not a real ZIP archive; treating it as a pipe-delimited text file."
+        )
+        return download_path
+
+    print(f"Downloaded ZIP file {download_path}, extracting...")
+    with zipfile_module.ZipFile(download_path, "r") as archive:
+        archive.extractall(DATA_DIR)
+        candidates = [p for p in archive.namelist() if p.lower().endswith((".txt", ".csv"))]
+        preferred = None
+        for candidate in candidates:
+            if "building" in candidate.lower() or "tf_building" in candidate.lower():
+                preferred = candidate
+                break
+        if not preferred and candidates:
+            preferred = candidates[0]
+        if preferred:
+            extracted_path = DATA_DIR / Path(preferred).name
+            print(f"Using extracted file: {extracted_path}")
+            return extracted_path
+
+    print("No text/csv file found inside ZIP; falling back to downloaded file path")
+    return download_path
+
 
 def process_data():
     # Choose input file: prioritize explicit environment override, then downloaded file, then default
@@ -115,35 +149,7 @@ def process_data():
             # Validate the downloaded file
             validate_download()
 
-            # If ZIP, try to extract the relevant file
-            if str(download_path).lower().endswith('.zip'):
-                print(f"Downloaded ZIP file {download_path}, extracting...")
-                try:
-                    with zipfile.ZipFile(download_path, 'r') as z:
-                        z.extractall(DATA_DIR)
-                        # Prefer a file that contains 'BUILDING' or 'TF_BUILDING' and ends with .txt or .csv
-                        candidates = [p for p in z.namelist() if p.lower().endswith(('.txt', '.csv'))]
-                        preferred = None
-                        for c in candidates:
-                            if 'building' in c.lower() or 'tf_building' in c.lower():
-                                preferred = c
-                                break
-                        if not preferred and candidates:
-                            preferred = candidates[0]
-                        if preferred:
-                            extracted_path = DATA_DIR / Path(preferred).name
-                            print(f"Using extracted file: {extracted_path}")
-                            input_file = extracted_path
-                        else:
-                            print('No text/csv file found inside ZIP; falling back to downloaded ZIP file path')
-                            input_file = download_path
-                except zipfile.BadZipFile as zip_err:
-                    print(f'❌ ZIP extraction failed: {zip_err}')
-                    print('This usually means the downloaded file is corrupted or not actually a ZIP file.')
-                    print('Check if the server is returning an error page or if there\'s a network issue.')
-                    raise
-            else:
-                input_file = download_path
+            input_file = resolve_downloaded_input(download_path, zipfile)
         except Exception as e:
             print(f'❌ Download failed: {e}')
             print('Falling back to local file if available...')
@@ -169,9 +175,7 @@ def process_data():
             raise FileNotFoundError(f"Data directory does not exist: {DATA_DIR}")
 
     print(f"Reading {input_file}...")
-    # Read the text file (assuming comma separated based on previous CSV check, or check delimiter)
-    # The previous read_file of csv showed comma. Let's assume the txt is also comma or tab.
-    # Usually these exports are CSVs.
+    # Statbel publishes this dataset as a pipe-delimited text file, sometimes wrapped in a ZIP archive.
     try:
         df = pd.read_csv(input_file, encoding='utf-8', sep='|', low_memory=False)
     except Exception:
@@ -274,7 +278,7 @@ def process_data():
 
     # Create per-year aggregates for use by the map (one chunk per year)
     yearly_dir = RESULTS_DIR / "yearly"
-    yearly_dir.mkdir(parents=True, exist_ok=True)
+    reset_generated_dir(yearly_dir)
     years = sorted(df_agg['y'].unique())
     yearly_index = []
     for year in years:
@@ -289,7 +293,7 @@ def process_data():
 
     # Create per-municipality monthly time series (only years > 2018)
     municipalities_dir = RESULTS_DIR / "municipality"
-    municipalities_dir.mkdir(parents=True, exist_ok=True)
+    reset_generated_dir(municipalities_dir)
 
     # Only include monthly data strictly after 2018 (i.e., 2019+)
     df_month_for_mun = df_month[df_month['y'] > 2018]
@@ -316,7 +320,7 @@ def process_data():
 
     # Copy yearly files to public/yearly
     public_yearly_dir = OUTPUT_PUBLIC_DIR / "yearly"
-    public_yearly_dir.mkdir(parents=True, exist_ok=True)
+    reset_generated_dir(public_yearly_dir)
     for y in years:
         src = yearly_dir / f"year_{y}.json"
         dst = public_yearly_dir / f"year_{y}.json"
@@ -325,7 +329,7 @@ def process_data():
 
     # Copy municipality files to public/municipality
     public_mun_dir = OUTPUT_PUBLIC_DIR / "municipality"
-    public_mun_dir.mkdir(parents=True, exist_ok=True)
+    reset_generated_dir(public_mun_dir)
     for entry in municipality_index:
         src = municipalities_dir / Path(entry['file']).name
         dst = public_mun_dir / Path(entry['file']).name
@@ -342,5 +346,3 @@ def process_data():
 
 if __name__ == "__main__":
     process_data()
-
-
