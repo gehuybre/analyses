@@ -545,6 +545,8 @@ function MetricSection({
   lookupsData: LookupsData | null
 }) {
   const [currentView, setCurrentView] = React.useState<"chart" | "table" | "map">("chart")
+  const isCurrencyMetric = label === "Prijs (€)"
+  const yAxisLabelAbove = isCurrencyMetric ? "Prijs" : label
 
   const exportData = React.useMemo(
     () =>
@@ -627,6 +629,9 @@ function MetricSection({
                 getLabel={(d) => String((d as YearPoint).periodCells[0])}
                 getValue={(d) => (d as YearPoint).value}
                 getSortValue={(d) => (d as YearPoint).sortValue}
+                yAxisLabelAbove={yAxisLabelAbove}
+                isCurrency={isCurrencyMetric}
+                tooltipUsesYAxisFormatter={true}
               />
             </CardContent>
           </Card>
@@ -704,6 +709,8 @@ function QuarterlyMetricSection({
   lookupsData: LookupsData | null
 }) {
   const [currentView, setCurrentView] = React.useState<"chart" | "table" | "map">("chart")
+  const isCurrencyMetric = label === "Prijs (€)"
+  const yAxisLabelAbove = isCurrencyMetric ? "Prijs" : label
 
   const exportData = React.useMemo(
     () =>
@@ -808,6 +815,9 @@ function QuarterlyMetricSection({
                 getLabel={(d) => `${(d as YearPoint).periodCells[0]} ${(d as YearPoint).periodCells[1]}`}
                 getValue={(d) => (d as YearPoint).value}
                 getSortValue={(d) => (d as YearPoint).sortValue}
+                yAxisLabelAbove={yAxisLabelAbove}
+                isCurrency={isCurrencyMetric}
+                tooltipUsesYAxisFormatter={true}
               />
             </CardContent>
           </Card>

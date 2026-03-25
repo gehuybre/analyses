@@ -19,7 +19,7 @@ import {
 } from "recharts"
 import type { LegendPayload } from "recharts/types/component/DefaultLegendContent"
 import { CHART_SERIES_COLORS, CHART_THEME } from "@/lib/chart-theme"
-import { createAutoScaledFormatter, createYAxisLabel } from "@/lib/number-formatters"
+import { createAutoScaledFormatter, createYAxisLabel, formatScaledTooltipValue } from "@/lib/number-formatters"
 
 type UnknownRecord = Record<string, any>
 
@@ -61,6 +61,11 @@ interface FilterableChartProps<TData = UnknownRecord> {
    */
   isCurrency?: boolean
   /**
+   * If true, uses the Y-axis formatter and scale for tooltip values as well.
+   * Useful when the tooltip should match axis ticks and the scale label above the chart.
+   */
+  tooltipUsesYAxisFormatter?: boolean
+  /**
    * Chart type to render. Default: 'composed' (Bar + Line for moving average)
    * - 'composed': Bar chart with optional Line overlay (current default behavior)
    * - 'line': Line chart only
@@ -93,6 +98,7 @@ export function FilterableChart<TData = UnknownRecord>({
   highlightSeriesKey,
   yAxisFormatter,
   isCurrency = false,
+  tooltipUsesYAxisFormatter = false,
   chartType = 'composed',
   layout = 'vertical',
   highlightLabel,
@@ -205,15 +211,15 @@ export function FilterableChart<TData = UnknownRecord>({
   }, [data, metric, getLabel, getValue, getSortValue, showMovingAverage, hasSeries])
 
   // Auto-scale formatter for Y-axis to prevent label overflow
-  const { computedYAxisFormatter, scaleLabel } = useMemo(() => {
-    if (yAxisFormatter) return { computedYAxisFormatter: yAxisFormatter, scaleLabel: "" }
+  const { computedYAxisFormatter, scaleLabel, scaleUnit } = useMemo(() => {
+    if (yAxisFormatter) return { computedYAxisFormatter: yAxisFormatter, scaleLabel: "", scaleUnit: "" }
     const values = hasSeries
       ? chartData.flatMap((d: any) =>
         (series ?? []).map((s) => (typeof d?.[s.key] === "number" ? d[s.key] : NaN))
       )
       : chartData.map((d: any) => d.value)
-    const { formatter, scaleLabel } = createAutoScaledFormatter(values, isCurrency)
-    return { computedYAxisFormatter: formatter, scaleLabel }
+    const { formatter, scaleLabel, scaleUnit } = createAutoScaledFormatter(values, isCurrency)
+    return { computedYAxisFormatter: formatter, scaleLabel, scaleUnit }
   }, [chartData, yAxisFormatter, isCurrency, hasSeries, series])
 
   // Y-axis label above chart (new style)
@@ -278,6 +284,11 @@ export function FilterableChart<TData = UnknownRecord>({
   const formatTooltipValue = (value: any) => {
     const numeric = typeof value === "number" ? value : Number(value)
     if (!Number.isFinite(numeric)) return String(value ?? "")
+    if (tooltipUsesYAxisFormatter) {
+      return scaleUnit
+        ? formatScaledTooltipValue(numeric, computedYAxisFormatter, scaleUnit)
+        : computedYAxisFormatter(numeric)
+    }
     return isCurrency ? `€${numeric.toLocaleString('nl-BE')}` : numeric.toLocaleString('nl-BE')
   }
 

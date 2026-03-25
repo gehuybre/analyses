@@ -285,6 +285,7 @@ export function VastgoedVerkopenEmbed({
   const isQuarterly = section.includes("kwartaal")
   const isPriceMetric = section.includes("prijzen")
   const label = isPriceMetric ? "Prijs (€)" : "Transacties"
+  const yAxisLabelAbove = isPriceMetric ? "Prijs" : label
   const periodHeaders = isQuarterly ? ["Jaar", "Kwartaal"] : ["Jaar"]
   const hasData = yearSeries.length > 0
   const mapData = isQuarterly ? quarterlyMapRows : annualMapRows
@@ -363,6 +364,9 @@ export function VastgoedVerkopenEmbed({
           }
           getValue={(d) => (d as YearPoint).value}
           getSortValue={(d) => (d as YearPoint).sortValue}
+          yAxisLabelAbove={yAxisLabelAbove}
+          isCurrency={isPriceMetric}
+          tooltipUsesYAxisFormatter={true}
         />
       )}
 
