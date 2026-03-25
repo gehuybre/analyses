@@ -311,6 +311,17 @@ export const EMBED_CONFIGS: AnalysisEmbedConfig[] = [
     },
   },
   {
+    slug: "nbb-rente",
+    sections: {
+      "hypothecaire-rente": {
+        type: "custom",
+        title: "Hypothecaire rente op nieuwe contracten (> 10 jaar rentevast)",
+        component: "NbbRenteEmbed",
+        height: 720,
+      },
+    },
+  },
+  {
     slug: "gemeentelijke-investeringen",
     sections: {
       "investments-bv": {

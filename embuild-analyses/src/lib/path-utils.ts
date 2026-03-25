@@ -4,6 +4,39 @@
 
 const deployVersion = process.env.NEXT_PUBLIC_DEPLOY_VERSION || ""
 
+function splitPathSegments(pathname: string): string[] {
+  return pathname.split("/").filter(Boolean)
+}
+
+function joinBaseAndPath(base: string, normalizedPath: string): string {
+  if (!base) {
+    return normalizedPath
+  }
+
+  const isAbsoluteUrl = /^https?:\/\//.test(base)
+  const parsed = new URL(base, isAbsoluteUrl ? undefined : "https://example.invalid")
+  const baseSegments = splitPathSegments(parsed.pathname)
+  const pathSegments = splitPathSegments(normalizedPath)
+
+  if (
+    baseSegments.length > 0 &&
+    pathSegments.length > 0 &&
+    baseSegments[baseSegments.length - 1] === pathSegments[0]
+  ) {
+    pathSegments.shift()
+  }
+
+  parsed.pathname = `/${[...baseSegments, ...pathSegments].join("/")}`
+  parsed.search = ""
+  parsed.hash = ""
+
+  if (isAbsoluteUrl) {
+    return parsed.toString()
+  }
+
+  return parsed.pathname
+}
+
 /**
  * Get the base path for the application.
  * In production (GitHub Pages), this is '/analyses'
@@ -54,7 +87,7 @@ export function getDataBaseUrl(): string {
 export function getDataPath(path: string): string {
   const baseUrl = getDataBaseUrl();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${baseUrl}${normalizedPath}`;
+  return joinBaseAndPath(baseUrl, normalizedPath);
 }
 
 /**
@@ -64,7 +97,7 @@ export function getDataPath(path: string): string {
 export function getLocalPublicPath(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const basePath = getBasePath();
-  return `${basePath}${normalizedPath}`;
+  return joinBaseAndPath(basePath, normalizedPath);
 }
 
 /**

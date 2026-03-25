@@ -1,0 +1,27 @@
+---
+title: Hypothecaire rente in België
+date: 2026-03-25
+summary: Evolutie van de Belgische hypothecaire rente op nieuwe contracten met een initiële rentevaste periode van meer dan 10 jaar, op basis van de NBB MIR-statistiek sinds 2015.
+tags: [rente, hypotheken, nbb, woningmarkt]
+slug: nbb-rente
+sourceProvider: Nationale Bank van België (NBB)
+sourceTitle: MFI rentetarieven (MIR) - hypothecaire rente op nieuwe contracten (> 10 jaar rentevast)
+sourceUrl: https://nsidisseminate-stat.nbb.be/rest/data/BE2,DF_MIR,1.0/M.R_N.2250.A2C.A_P.Z.Z?startPeriod=2015-01&dimensionAtObservation=AllDimensions
+sourcePublicationDate: 2026-01-31
+---
+
+import { NbbRenteDashboard } from "@/components/analyses/nbb-rente/NbbRenteDashboard"
+
+Deze analyse volgt de Belgische hypothecaire rente voor huishoudens op nieuwe contracten voor de aankoop van een woning, met een initiële rentevaste periode van meer dan 10 jaar. De reeks wordt opgebouwd via de NBB MIR API en automatisch ververst.
+
+De gebruikte NBB-selectie is: `R_N` (rentetarieven op nieuwe contracten), `2250` (huishoudens), `A2C` (leningen voor de aankoop van een huis) en `A_P` (initiële rentevaste periode voor meer dan 10 jaar). De grafiek start in 2015.
+
+## Interactieve grafiek
+
+Gebruik de grafiek of tabel hieronder om de maandelijkse rente-evolutie te bekijken.
+
+<NbbRenteDashboard />
+
+## Methodologie
+
+De cijfers komen rechtstreeks uit de SDMX API van de Nationale Bank van België. De analyse gebruikt maandelijkse observaties vanaf januari 2015 en bewaart de resultaten als statische JSON- en CSV-bestanden, zodat de pagina en embeds snel blijven laden.

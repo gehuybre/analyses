@@ -10,6 +10,7 @@ import { EnergiekaartPremiesEmbed } from "@/components/analyses/energiekaart-pre
 import { EpcLabelverdelingEmbed } from "@/components/analyses/epc-labelverdeling/EpcLabelverdelingEmbed"
 import { VergunningenAanvragenEmbed } from "@/components/analyses/vergunningen-aanvragen/VergunningenAanvragenEmbed"
 import { GebouwenparkEmbed } from "@/components/analyses/gebouwenpark/GebouwenparkEmbed"
+import { NbbRenteEmbed } from "@/components/analyses/nbb-rente/NbbRenteEmbed"
 import { InvesteringenBVSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVSection"
 import { InvesteringenBVIndexedSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVIndexedSection"
 import { InvesteringenBVTopFieldsSection } from "@/components/analyses/gemeentelijke-investeringen/InvesteringenBVTopFieldsSection"
@@ -554,6 +555,27 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
       return (
         <GebouwenparkEmbed
           section={section as "evolutie"}
+        />
+      )
+    }
+
+    // Handle NbbRenteEmbed
+    if (config.component === "NbbRenteEmbed") {
+      const validSections = getValidSections(slug)
+      if (!validSections.includes(section)) {
+        return (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">
+              Ongeldige sectie: {section}. Geldige opties: {validSections.join(", ")}
+            </p>
+          </div>
+        )
+      }
+
+      return (
+        <NbbRenteEmbed
+          section={section as "hypothecaire-rente"}
+          viewType={toChartOrTableViewType(urlParams.view)}
         />
       )
     }
