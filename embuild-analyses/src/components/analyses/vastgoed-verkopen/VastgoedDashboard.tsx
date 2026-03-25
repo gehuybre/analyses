@@ -17,6 +17,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { getDataPath } from "@/lib/path-utils"
+import { getProvinceForMunicipality, getRegionForMunicipality, type RegionCode } from "@/lib/geo-utils"
 import { GeoProvider } from "../shared/GeoContext"
 import { FilterableChart } from "../shared/FilterableChart"
 import { FilterableTable } from "../shared/FilterableTable"
@@ -59,21 +60,27 @@ type GeoEntity = {
   name: string
 }
 
+type LookupsData = {
+  property_types: PropertyType[]
+  regions: GeoEntity[]
+  provinces: GeoEntity[]
+  municipalities: GeoEntity[]
+}
+
+type MunicipalityMetricRow = {
+  nis: string
+  name: string
+  y: number
+  type: string
+  n: number
+  p50: number
+}
+
+const MUNICIPALITY_LEVEL = 5
+
 type YearPoint = {
   sortValue: number
   periodCells: Array<string | number>
-  value: number
-}
-
-type RegionPoint = {
-  r: string
-  y: number
-  value: number
-}
-
-type ProvincePoint = {
-  p: string
-  y: number
   value: number
 }
 
@@ -116,8 +123,8 @@ function formatPrice(n: number) {
 function useVastgoedData() {
   const [yearlyData, setYearlyData] = React.useState<YearlyRow[] | null>(null)
   const [quarterlyData, setQuarterlyData] = React.useState<QuarterlyRow[] | null>(null)
-  const [municipalitiesData, setMunicipalitiesData] = React.useState<any[] | null>(null)
-  const [lookupsData, setLookupsData] = React.useState<any | null>(null)
+  const [municipalitiesData, setMunicipalitiesData] = React.useState<MunicipalityMetricRow[] | null>(null)
+  const [lookupsData, setLookupsData] = React.useState<LookupsData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -193,24 +200,23 @@ function useVastgoedData() {
   return { yearlyData, quarterlyData, municipalitiesData, lookupsData, loading, error }
 }
 
-function usePropertyTypeOptions(lookupsData: any): PropertyType[] {
+function usePropertyTypeOptions(lookupsData: LookupsData | null): PropertyType[] {
   return lookupsData?.property_types ?? []
 }
 
-function useRegionOptions(lookupsData: any): GeoEntity[] {
+function useRegionOptions(lookupsData: LookupsData | null): GeoEntity[] {
   return (lookupsData?.regions ?? []).map((r: GeoEntity) => ({
     ...r,
     code: mapRegionCode(r.code),
   }))
 }
 
-function useProvinceOptions(lookupsData: any): GeoEntity[] {
+function useProvinceOptions(lookupsData: LookupsData | null): GeoEntity[] {
   return lookupsData?.provinces ?? []
 }
 
-function useMunicipalityOptions(lookupsData: any): GeoEntity[] {
-  // Municipalities are not currently available in lookups
-  return []
+function useMunicipalityOptions(lookupsData: LookupsData | null): GeoEntity[] {
+  return lookupsData?.municipalities ?? []
 }
 
 // Geo filter inline component
@@ -223,7 +229,7 @@ function GeoFilterInline({
   selectedLevel: "belgium" | "region" | "province" | "municipality"
   selectedNis: string | null
   onSelect: (level: "belgium" | "region" | "province" | "municipality", nis: string | null) => void
-  lookupsData: any
+  lookupsData: LookupsData | null
 }) {
   const [open, setOpen] = React.useState(false)
   const regions = useRegionOptions(lookupsData)
@@ -344,7 +350,7 @@ function PropertyTypeFilterInline({
 }: {
   selected: string
   onChange: (code: string) => void
-  lookupsData: any
+  lookupsData: LookupsData | null
 }) {
   const [open, setOpen] = React.useState(false)
   const options = usePropertyTypeOptions(lookupsData)
@@ -433,6 +439,34 @@ function filterQuarterlyByGeo(rows: QuarterlyRow[], level: "belgium" | "region" 
   return rows.filter((r) => r.lvl === 1)
 }
 
+function filterMunicipalityRowsByGeo<T extends { nis: string }>(
+  rows: T[],
+  level: "belgium" | "region" | "province" | "municipality",
+  nis: string | null
+): T[] {
+  if (!nis || level === "belgium") {
+    return rows
+  }
+
+  if (level === "municipality") {
+    return rows.filter((row) => row.nis === nis)
+  }
+
+  if (level === "province") {
+    return rows.filter((row) => getProvinceForMunicipality(Number(row.nis)) === nis)
+  }
+
+  if (level === "region") {
+    return rows.filter((row) => getRegionForMunicipality(Number(row.nis)) === (nis as RegionCode))
+  }
+
+  return rows
+}
+
+function formatQuarterPeriod(row: { y: number; q: number }) {
+  return `${row.y} Q${row.q}`
+}
+
 // Aggregation functions
 function aggregateTransactionsByYear(rows: YearlyRow[]): YearPoint[] {
   const agg = new Map<number, number>()
@@ -468,47 +502,15 @@ function aggregateByQuarter(rows: QuarterlyRow[], metric: "n" | "p50"): YearPoin
     .sort((a, b) => a.sortValue - b.sortValue)
 }
 
-function aggregateByRegionAllYears(rows: YearlyRow[], metric: "n" | "p50"): RegionPoint[] {
-  const regionRows = rows.filter((r) => r.lvl === 2 && typeof r.y === "number")
-  return regionRows.map((r) => ({
-    r: mapRegionCode(r.nis),
-    y: r.y,
-    value: r[metric],
-  }))
-}
-
-function aggregateByProvinceAllYears(rows: YearlyRow[], metric: "n" | "p50"): ProvincePoint[] {
-  const provRows = rows.filter((r) => r.lvl === 3 && typeof r.y === "number")
-  return provRows.map((r) => ({
-    p: r.nis,
-    y: r.y,
-    value: r[metric],
-  }))
-}
-
-type MunicipalityPoint = {
-  m: string
-  y: number
-  value: number
-}
-
-function aggregateByMunicipalityAllYears(rows: YearlyRow[], metric: "n" | "p50"): MunicipalityPoint[] {
-  const munRows = rows.filter((r) => r.lvl === 5 && typeof r.y === "number")
-  return munRows.map((r) => ({
-    m: r.nis,
-    y: r.y,
-    value: r[metric],
-  }))
-}
-
 // Metric Section Component
 function MetricSection({
   title,
   label,
   yearSeries,
   mapData,
-  years,
-  mapLevel,
+  mapPeriods,
+  getMapValue,
+  getMapPeriod,
   formatValue,
   geoLevel,
   selectedNis,
@@ -520,15 +522,15 @@ function MetricSection({
   dataSource,
   dataSourceUrl,
   embedParams,
-  municipalitiesData,
   lookupsData,
 }: {
   title: string
   label: string
   yearSeries: YearPoint[]
-  mapData: RegionPoint[] | ProvincePoint[] | MunicipalityPoint[]
-  years: number[]
-  mapLevel: "region" | "province" | "municipality"
+  mapData: MunicipalityMetricRow[]
+  mapPeriods: number[]
+  getMapValue: (row: MunicipalityMetricRow) => number
+  getMapPeriod: (row: MunicipalityMetricRow) => number
   formatValue: (v: number) => string
   geoLevel: "belgium" | "region" | "province" | "municipality"
   selectedNis: string | null
@@ -540,8 +542,7 @@ function MetricSection({
   dataSource?: string
   dataSourceUrl?: string
   embedParams?: Record<string, string | number | null | undefined>
-  municipalitiesData: any[]
-  lookupsData: any
+  lookupsData: LookupsData | null
 }) {
   const [currentView, setCurrentView] = React.useState<"chart" | "table" | "map">("chart")
 
@@ -642,16 +643,16 @@ function MetricSection({
         </TabsContent>
         <TabsContent value="map">
           <MapSection
-            data={municipalitiesData}
-            getGeoCode={(d: any) => d.nis}
-            getValue={(d: any) => (label === "Mediane prijs" ? d.p50 : d.n) ?? 0}
-            getPeriod={(d: any) => d.y}
-            periods={years}
-            showTimeSlider={years.length > 1}
+            data={mapData}
+            getGeoCode={(d: MunicipalityMetricRow) => d.nis}
+            getValue={getMapValue}
+            getPeriod={getMapPeriod}
+            periods={mapPeriods}
+            showTimeSlider={mapPeriods.length > 1}
             formatValue={formatValue}
             tooltipLabel={label}
             showProvinceBoundaries={true}
-            colorScheme={label === "Mediane prijs" ? "orange" : "blue"}
+            colorScheme={label === "Prijs (€)" ? "orange" : "blue"}
             height={500}
           />
         </TabsContent>
@@ -665,6 +666,10 @@ function QuarterlyMetricSection({
   title,
   label,
   quarterlySeries,
+  mapData,
+  mapPeriods,
+  getMapValue,
+  getMapPeriod,
   formatValue,
   geoLevel,
   selectedNis,
@@ -676,12 +681,15 @@ function QuarterlyMetricSection({
   dataSource,
   dataSourceUrl,
   embedParams,
-  municipalitiesData,
   lookupsData,
 }: {
   title: string
   label: string
   quarterlySeries: YearPoint[]
+  mapData: QuarterlyRow[]
+  mapPeriods: string[]
+  getMapValue: (row: QuarterlyRow) => number
+  getMapPeriod: (row: QuarterlyRow) => string
   formatValue: (v: number) => string
   geoLevel: "belgium" | "region" | "province" | "municipality"
   selectedNis: string | null
@@ -693,8 +701,7 @@ function QuarterlyMetricSection({
   dataSource?: string
   dataSourceUrl?: string
   embedParams?: Record<string, string | number | null | undefined>
-  municipalitiesData: any[]
-  lookupsData: any
+  lookupsData: LookupsData | null
 }) {
   const [currentView, setCurrentView] = React.useState<"chart" | "table" | "map">("chart")
 
@@ -816,20 +823,17 @@ function QuarterlyMetricSection({
           </Card>
         </TabsContent>
         <TabsContent value="map">
-          <div className="text-sm text-muted-foreground mb-4">
-            Kaart toont jaarlijkse data (kwartaaldata niet beschikbaar op gemeenteniveau)
-          </div>
           <MapSection
-            data={municipalitiesData}
-            getGeoCode={(d: any) => d.nis}
-            getValue={(d: any) => (label === "Mediane prijs" ? d.p50 : d.n) ?? 0}
-            getPeriod={(d: any) => d.y}
-            periods={Array.from(new Set(municipalitiesData.map((d: any) => d.y))).sort()}
-            showTimeSlider={true}
+            data={mapData}
+            getGeoCode={(d: QuarterlyRow) => d.nis}
+            getValue={getMapValue}
+            getPeriod={getMapPeriod}
+            periods={mapPeriods}
+            showTimeSlider={mapPeriods.length > 1}
             formatValue={formatValue}
             tooltipLabel={label}
             showProvinceBoundaries={true}
-            colorScheme={label === "Mediane prijs" ? "orange" : "blue"}
+            colorScheme={label === "Prijs (€)" ? "orange" : "blue"}
             height={500}
           />
         </TabsContent>
@@ -846,46 +850,20 @@ function InnerDashboard() {
   const [selectedType, setSelectedType] = React.useState<string>("alle_huizen")
   const [mounted, setMounted] = React.useState(false)
 
+  const yearlyRows = React.useMemo(() => yearlyData ?? [], [yearlyData])
+  const quarterlyRows = React.useMemo(() => quarterlyData ?? [], [quarterlyData])
+  const municipalityRows = React.useMemo(() => municipalitiesData ?? [], [municipalitiesData])
+  const resolvedLookupsData = lookupsData ?? {
+    property_types: [],
+    regions: [],
+    provinces: [],
+    municipalities: [],
+  }
+
   // Prevent hydration mismatch by only rendering after client mount
   React.useEffect(() => {
     setMounted(true)
   }, [])
-
-  // Don't render anything on server to prevent hydration mismatch
-  if (!mounted) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">Vastgoeddata laden...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-          <p className="text-muted-foreground">Vastgoeddata laden...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show error state
-  if (error || !yearlyData || !quarterlyData || !municipalitiesData || !lookupsData) {
-    return (
-      <div className="rounded-lg border bg-destructive/10 p-6 text-center">
-        <p className="text-destructive">Fout bij het laden van de data: {error || "Onbekende fout"}</p>
-      </div>
-    )
-  }
-
-  const yearlyRows = yearlyData
-  const quarterlyRows = quarterlyData
 
   // Filter data
   const filteredYearly = React.useMemo(() => {
@@ -907,52 +885,68 @@ function InnerDashboard() {
   // Get all years for time slider
   const years = React.useMemo(() => {
     const yearSet = new Set<number>()
-    for (const r of yearlyRows) {
+    for (const r of municipalityRows) {
       if (typeof r.y === "number") yearSet.add(r.y)
     }
     return Array.from(yearSet).sort((a, b) => a - b)
-  }, [yearlyRows])
+  }, [municipalityRows])
 
-  // Map data - filter by selected type (all years for time slider)
-  const transactionsMapRegion = React.useMemo(() => {
-    const filtered = filterByPropertyType(yearlyRows, selectedType)
-    return aggregateByRegionAllYears(filtered, "n")
-  }, [yearlyRows, selectedType])
+  const annualMunicipalityMapData = React.useMemo(() => {
+    const filtered = municipalityRows.filter((row) => row.type === selectedType)
+    return filterMunicipalityRowsByGeo(filtered, geoLevel, selectedNis)
+  }, [municipalityRows, selectedType, geoLevel, selectedNis])
 
-  const transactionsMapProvince = React.useMemo(() => {
-    const filtered = filterByPropertyType(yearlyRows, selectedType)
-    return aggregateByProvinceAllYears(filtered, "n")
-  }, [yearlyRows, selectedType])
+  const quarterlyMunicipalityMapData = React.useMemo(() => {
+    const filtered = quarterlyRows.filter(
+      (row) => row.lvl === MUNICIPALITY_LEVEL && row.type === selectedType
+    )
+    return filterMunicipalityRowsByGeo(filtered, geoLevel, selectedNis)
+  }, [quarterlyRows, selectedType, geoLevel, selectedNis])
 
-  const priceMapRegion = React.useMemo(() => {
-    const filtered = filterByPropertyType(yearlyRows, selectedType)
-    return aggregateByRegionAllYears(filtered, "p50")
-  }, [yearlyRows, selectedType])
+  const quarterlyMapPeriods = React.useMemo(() => {
+    const periodMap = new Map<string, number>()
+    quarterlyMunicipalityMapData.forEach((row) => {
+      periodMap.set(formatQuarterPeriod(row), row.y * 10 + row.q)
+    })
 
-  const priceMapProvince = React.useMemo(() => {
-    const filtered = filterByPropertyType(yearlyRows, selectedType)
-    return aggregateByProvinceAllYears(filtered, "p50")
-  }, [yearlyRows, selectedType])
-
-  const transactionsMapMunicipality = React.useMemo(() => {
-    const filtered = filterByPropertyType(yearlyRows, selectedType)
-    return aggregateByMunicipalityAllYears(filtered, "n")
-  }, [yearlyRows, selectedType])
-
-  const priceMapMunicipality = React.useMemo(() => {
-    const filtered = filterByPropertyType(yearlyRows, selectedType)
-    return aggregateByMunicipalityAllYears(filtered, "p50")
-  }, [yearlyRows, selectedType])
-
-  // Determine map level based on current geo selection
-  const mapLevel =
-    geoLevel === "province" && selectedNis ? "municipality" :
-    geoLevel === "region" && selectedNis ? "province" :
-    "region"
+    return Array.from(periodMap.entries())
+      .sort((a, b) => a[1] - b[1])
+      .map(([label]) => label)
+  }, [quarterlyMunicipalityMapData])
 
   function handleSelectGeo(level: "belgium" | "region" | "province" | "municipality", nis: string | null) {
     setGeoLevel(level)
     setSelectedNis(nis)
+  }
+
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="text-muted-foreground">Vastgoeddata laden...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="text-muted-foreground">Vastgoeddata laden...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !yearlyData || !quarterlyData || !municipalitiesData || !lookupsData) {
+    return (
+      <div className="rounded-lg border bg-destructive/10 p-6 text-center">
+        <p className="text-destructive">Fout bij het laden van de data: {error || "Onbekende fout"}</p>
+      </div>
+    )
   }
 
   return (
@@ -968,13 +962,10 @@ function InnerDashboard() {
         title="Aantal transacties"
         label="Transacties"
         yearSeries={transactionsSeries}
-        mapData={
-          mapLevel === "municipality" ? transactionsMapMunicipality :
-          mapLevel === "province" ? transactionsMapProvince :
-          transactionsMapRegion
-        }
-        years={years}
-        mapLevel={mapLevel}
+        mapData={annualMunicipalityMapData}
+        mapPeriods={years}
+        getMapValue={(row) => row.n}
+        getMapPeriod={(row) => row.y}
         formatValue={formatInt}
         geoLevel={geoLevel}
         selectedNis={selectedNis}
@@ -989,21 +980,17 @@ function InnerDashboard() {
           geo: geoLevel !== "belgium" ? selectedNis : null,
           type: selectedType,
         }}
-        municipalitiesData={municipalitiesData}
-        lookupsData={lookupsData}
+        lookupsData={resolvedLookupsData}
       />
 
       <MetricSection
         title="Mediaanprijs"
         label="Prijs (€)"
         yearSeries={priceSeries}
-        mapData={
-          mapLevel === "municipality" ? priceMapMunicipality :
-          mapLevel === "province" ? priceMapProvince :
-          priceMapRegion
-        }
-        years={years}
-        mapLevel={mapLevel}
+        mapData={annualMunicipalityMapData}
+        mapPeriods={years}
+        getMapValue={(row) => row.p50}
+        getMapPeriod={(row) => row.y}
         formatValue={formatPrice}
         geoLevel={geoLevel}
         selectedNis={selectedNis}
@@ -1018,14 +1005,17 @@ function InnerDashboard() {
           geo: geoLevel !== "belgium" ? selectedNis : null,
           type: selectedType,
         }}
-        municipalitiesData={municipalitiesData}
-        lookupsData={lookupsData}
+        lookupsData={resolvedLookupsData}
       />
 
       <QuarterlyMetricSection
         title="Transacties per kwartaal"
         label="Transacties"
         quarterlySeries={quarterlyTransactions}
+        mapData={quarterlyMunicipalityMapData}
+        mapPeriods={quarterlyMapPeriods}
+        getMapValue={(row) => row.n}
+        getMapPeriod={formatQuarterPeriod}
         formatValue={formatInt}
         geoLevel={geoLevel}
         selectedNis={selectedNis}
@@ -1040,14 +1030,17 @@ function InnerDashboard() {
           geo: geoLevel !== "belgium" ? selectedNis : null,
           type: selectedType,
         }}
-        municipalitiesData={municipalitiesData}
-        lookupsData={lookupsData}
+        lookupsData={resolvedLookupsData}
       />
 
       <QuarterlyMetricSection
         title="Mediaanprijs per kwartaal"
         label="Prijs (€)"
         quarterlySeries={quarterlyPrices}
+        mapData={quarterlyMunicipalityMapData}
+        mapPeriods={quarterlyMapPeriods}
+        getMapValue={(row) => row.p50}
+        getMapPeriod={formatQuarterPeriod}
         formatValue={formatPrice}
         geoLevel={geoLevel}
         selectedNis={selectedNis}
@@ -1062,8 +1055,7 @@ function InnerDashboard() {
           geo: geoLevel !== "belgium" ? selectedNis : null,
           type: selectedType,
         }}
-        municipalitiesData={municipalitiesData}
-        lookupsData={lookupsData}
+        lookupsData={resolvedLookupsData}
       />
     </div>
   )

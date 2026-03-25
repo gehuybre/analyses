@@ -405,7 +405,7 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
       return (
         <VastgoedVerkopenEmbed
           section={section as "transacties" | "prijzen" | "transacties-kwartaal" | "prijzen-kwartaal"}
-          viewType={toChartOrTableViewType(urlParams.view)}
+          viewType={urlParams.view}
           type={urlParams.type ?? undefined}
           geo={urlParams.geo}
         />

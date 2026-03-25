@@ -3,7 +3,9 @@
 import { useMemo, useState, useEffect } from "react"
 import { FilterableChart } from "../shared/FilterableChart"
 import { FilterableTable } from "../shared/FilterableTable"
+import { MapSection } from "../shared/MapSection"
 import { getDataPath } from "@/lib/path-utils"
+import { PROVINCES, getProvinceForMunicipality, getRegionForMunicipality, type RegionCode } from "@/lib/geo-utils"
 
 import { useJsonBundle } from "@/lib/use-json-bundle"
 
@@ -37,8 +39,19 @@ type YearPoint = {
 }
 
 type SectionType = "transacties" | "prijzen" | "transacties-kwartaal" | "prijzen-kwartaal"
-type ViewType = "chart" | "table"
-type GeoLevel = "belgium" | "region" | "province"
+type ViewType = "chart" | "table" | "map"
+type GeoLevel = "belgium" | "region" | "province" | "municipality"
+
+type MunicipalityMetricRow = {
+  nis: string
+  name: string
+  y: number
+  type: string
+  n: number
+  p50: number
+}
+
+const PROVINCE_CODES = new Set(PROVINCES.map((province) => province.code))
 
 function inferGeoLevelAndCode(geo: string | null | undefined): { level: GeoLevel; code: string | null } {
   if (!geo) return { level: "belgium", code: null }
@@ -48,16 +61,13 @@ function inferGeoLevelAndCode(geo: string | null | undefined): { level: GeoLevel
 
   // Regions are typically "2000/3000/4000" but data also contains "02000/03000/04000".
   if (geo === "2000" || geo === "3000" || geo === "4000" || geo === "02000" || geo === "03000" || geo === "04000") {
-    return { level: "region", code: geo }
+    return { level: "region", code: geo.replace(/^0/, "") }
   }
 
-  // Heuristic:
-  // - 4 digits => region (2000/3000/4000)
-  // - 5 digits starting with 0 => region (02000/03000/04000)
-  // - otherwise assume province (10000/20001/...)
   if (/^\d{4}$/.test(geo)) return { level: "region", code: geo }
-  if (/^0\d{4}$/.test(geo)) return { level: "region", code: geo }
-  return { level: "province", code: geo }
+  if (/^0\d{4}$/.test(geo)) return { level: "region", code: geo.replace(/^0/, "") }
+  if (PROVINCE_CODES.has(geo)) return { level: "province", code: geo }
+  return { level: "municipality", code: geo }
 }
 
 function filterYearlyByGeo(rows: YearlyRow[], geo: string | null | undefined): YearlyRow[] {
@@ -68,6 +78,7 @@ function filterYearlyByGeo(rows: YearlyRow[], geo: string | null | undefined): Y
     return rows.filter((r) => r.lvl === 2 && (r.nis === code || r.nis === codeWithZero))
   }
   if (level === "province" && code) return rows.filter((r) => r.lvl === 3 && r.nis === code)
+  if (level === "municipality" && code) return rows.filter((r) => r.lvl === 5 && r.nis === code)
   return rows.filter((r) => r.lvl === 1)
 }
 
@@ -79,7 +90,20 @@ function filterQuarterlyByGeo(rows: QuarterlyRow[], geo: string | null | undefin
     return rows.filter((r) => r.lvl === 2 && (r.nis === code || r.nis === codeWithZero))
   }
   if (level === "province" && code) return rows.filter((r) => r.lvl === 3 && r.nis === code)
+  if (level === "municipality" && code) return rows.filter((r) => r.lvl === 5 && r.nis === code)
   return rows.filter((r) => r.lvl === 1)
+}
+
+function filterMunicipalityRowsByGeo<T extends { nis: string }>(rows: T[], geo: string | null | undefined): T[] {
+  const { level, code } = inferGeoLevelAndCode(geo)
+  if (level === "belgium" || !code) return rows
+  if (level === "province") {
+    return rows.filter((row) => getProvinceForMunicipality(Number(row.nis)) === code)
+  }
+  if (level === "region") {
+    return rows.filter((row) => getRegionForMunicipality(Number(row.nis)) === (code as RegionCode))
+  }
+  return rows.filter((row) => row.nis === code)
 }
 
 function aggregateTransactionsByYear(rows: YearlyRow[]): YearPoint[] {
@@ -115,6 +139,22 @@ function aggregateByQuarter(rows: QuarterlyRow[], metric: "n" | "p50"): YearPoin
     .sort((a, b) => a.sortValue - b.sortValue)
 }
 
+function formatQuarterPeriod(row: { y: number; q: number }) {
+  return `${row.y} Q${row.q}`
+}
+
+function formatInt(value: number) {
+  return new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 }).format(value)
+}
+
+function formatPrice(value: number) {
+  return new Intl.NumberFormat("nl-BE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 interface VastgoedVerkopenEmbedProps {
   section: SectionType
   viewType: ViewType
@@ -130,11 +170,17 @@ export function VastgoedVerkopenEmbed({
 }: VastgoedVerkopenEmbedProps) {
   const { data: bundle, loading: bundleLoading, error: bundleError } = useJsonBundle<{
     yearly: YearlyRow[]
+    municipalities: MunicipalityMetricRow[]
   }>({
     yearly: "/analyses/vastgoed-verkopen/results/yearly.json",
+    municipalities: "/analyses/vastgoed-verkopen/results/municipalities.json",
   })
 
   const yearlyRows = useMemo(() => (bundle?.yearly as YearlyRow[]) ?? [], [bundle?.yearly])
+  const municipalityRows = useMemo(
+    () => (bundle?.municipalities as MunicipalityMetricRow[]) ?? [],
+    [bundle?.municipalities]
+  )
   const [quarterlyRows, setQuarterlyRows] = useState<QuarterlyRow[]>([])
   const [quarterlyLoading, setQuarterlyLoading] = useState(false)
   const [quarterlyError, setQuarterlyError] = useState<string | null>(null)
@@ -194,6 +240,20 @@ export function VastgoedVerkopenEmbed({
     return filterQuarterlyByGeo(quarterlyRows, geo).filter((r) => r.type === type)
   }, [quarterlyRows, geo, type])
 
+  const annualMapRows = useMemo(() => {
+    return filterMunicipalityRowsByGeo(
+      municipalityRows.filter((row) => row.type === type),
+      geo
+    )
+  }, [municipalityRows, geo, type])
+
+  const quarterlyMapRows = useMemo(() => {
+    return filterMunicipalityRowsByGeo(
+      quarterlyRows.filter((row) => row.lvl === 5 && row.type === type),
+      geo
+    )
+  }, [quarterlyRows, geo, type])
+
   // Compute the appropriate data series based on section
   const yearSeries = useMemo(() => {
     switch (section) {
@@ -222,6 +282,27 @@ export function VastgoedVerkopenEmbed({
     }
   }, [section])
 
+  const isQuarterly = section.includes("kwartaal")
+  const isPriceMetric = section.includes("prijzen")
+  const label = isPriceMetric ? "Prijs (€)" : "Transacties"
+  const periodHeaders = isQuarterly ? ["Jaar", "Kwartaal"] : ["Jaar"]
+  const hasData = yearSeries.length > 0
+  const mapData = isQuarterly ? quarterlyMapRows : annualMapRows
+  const mapPeriods = useMemo(() => {
+    if (!isQuarterly) {
+      return Array.from(new Set(annualMapRows.map((row) => row.y))).sort((a, b) => a - b)
+    }
+
+    const periods = new Map<string, number>()
+    quarterlyMapRows.forEach((row) => {
+      periods.set(formatQuarterPeriod(row), row.y * 10 + row.q)
+    })
+    return Array.from(periods.entries())
+      .sort((a, b) => a[1] - b[1])
+      .map(([period]) => period)
+  }, [annualMapRows, isQuarterly, quarterlyMapRows])
+  const formatMapValue = isPriceMetric ? formatPrice : formatInt
+
   if (bundleLoading) {
     return <div className="p-4">Data laden...</div>
   }
@@ -233,12 +314,6 @@ export function VastgoedVerkopenEmbed({
       </div>
     )
   }
-
-  const isQuarterly = section.includes("kwartaal")
-  const isPriceMetric = section.includes("prijzen")
-  const label = isPriceMetric ? "Prijs (€)" : "Transacties"
-  const periodHeaders = isQuarterly ? ["Jaar", "Kwartaal"] : ["Jaar"]
-  const hasData = yearSeries.length > 0
 
   // Show loading state for quarterly data
   if (needsQuarterly && quarterlyLoading) {
@@ -293,6 +368,32 @@ export function VastgoedVerkopenEmbed({
 
       {viewType === "table" && (
         <FilterableTable data={yearSeries} label={label} periodHeaders={periodHeaders} />
+      )}
+
+      {viewType === "map" && (
+        <>
+          {mapData.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <p>Geen kaartdata beschikbaar voor deze selectie.</p>
+            </div>
+          ) : (
+            <MapSection
+              data={mapData}
+              getGeoCode={(row: MunicipalityMetricRow | QuarterlyRow) => row.nis}
+              getValue={(row: MunicipalityMetricRow | QuarterlyRow) => (isPriceMetric ? row.p50 : row.n)}
+              getPeriod={(row: MunicipalityMetricRow | QuarterlyRow) =>
+                isQuarterly ? formatQuarterPeriod(row as QuarterlyRow) : (row as MunicipalityMetricRow).y
+              }
+              periods={mapPeriods}
+              showTimeSlider={mapPeriods.length > 1}
+              formatValue={formatMapValue}
+              tooltipLabel={label}
+              showProvinceBoundaries={true}
+              colorScheme={isPriceMetric ? "orange" : "blue"}
+              height={500}
+            />
+          )}
+        </>
       )}
 
       <div className="mt-4 text-xs text-muted-foreground text-center">

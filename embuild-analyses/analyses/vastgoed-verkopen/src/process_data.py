@@ -1,26 +1,60 @@
 """
 Vastgoed verkopen data processor.
 
-Downloads real estate transaction data from Statbel and processes it into
-aggregated JSON/CSV files for the blog dashboard.
+Loads the Statbel real-estate open-data workbook, prepares compact JSON/CSV
+artifacts for the dashboard, and mirrors the generated files to:
+- analyses/<slug>/results
+- public/data/<slug>
+- the split data repo (if present in the workspace)
 """
 
+from __future__ import annotations
+
+import hashlib
 import json
+import math
 import os
 import re
+import shutil
 import zipfile
 from pathlib import Path
+from typing import Iterable
 
 import pandas as pd
 import requests
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+BASE_DIR = SCRIPT_DIR.parent
+EMBUILD_DIR = BASE_DIR.parent.parent
+WORKSPACE_ROOT = EMBUILD_DIR.parent.parent
+DATA_REPO_DIR = WORKSPACE_ROOT / "data"
+
 DATA_DIR = BASE_DIR / "data"
 RESULTS_DIR = BASE_DIR / "results"
+PUBLIC_DATA_DIR = EMBUILD_DIR / "public" / "data" / "vastgoed-verkopen"
 CONTENT_FILE = BASE_DIR / "content.mdx"
+REMOTE_METADATA_FILE = DATA_DIR / ".remote_metadata.json"
 
-DEFAULT_INPUT_URL = "https://statbel.fgov.be/sites/default/files/files/opendata/immo/vastgoed_2010_9999.zip"
-DEFAULT_ZIP_NAME = "vastgoed_2010_9999.zip"
+DATA_REPO_RESULTS_DIRS = [
+    DATA_REPO_DIR / "analyses" / "vastgoed-verkopen" / "results",
+    DATA_REPO_DIR / "docs" / "analyses" / "vastgoed-verkopen" / "results",
+]
+DATA_REPO_PUBLIC_DIRS = [
+    DATA_REPO_DIR / "data" / "vastgoed-verkopen",
+    DATA_REPO_DIR / "docs" / "data" / "vastgoed-verkopen",
+]
+
+SOURCE_PAGE_URL = "https://statbel.fgov.be/nl/themas/bouwen-wonen/vastgoedprijzen"
+OPEN_DATA_PAGE_URL = "https://statbel.fgov.be/nl/open-data/verkopen-vastgoed-volgens-aard-de-verkoopsakte-belgie"
+DEFAULT_INPUT_URL = "https://statbel.fgov.be/sites/default/files/files/opendata/immo/vastgoed_2010_9999.xlsx"
+DIRECT_MUNICIPALITY_XLSX_URL = (
+    "https://statbel.fgov.be/sites/default/files/files/documents/"
+    "Bouwen%20%26%20wonen/2.1%20Vastgoedprijzen/NM/NL_immo_statbel_kwartaal_per_gemeente.xlsx"
+)
+DEFAULT_INPUT_FILENAME = Path(DEFAULT_INPUT_URL).name
+
+TARGET_CHUNK_SIZE_MB = 3
+BYTES_PER_MB = 1024 * 1024
 
 # Property types mapping (short codes)
 PROPERTY_TYPES = {
@@ -35,8 +69,42 @@ PROPERTY_TYPES = {
 LEVEL_BELGIUM = 1
 LEVEL_REGION = 2
 LEVEL_PROVINCE = 3
-LEVEL_ARRONDISSEMENT = 4
 LEVEL_MUNICIPALITY = 5
+
+TOTAL_SURFACE_LABEL = "totaal / total"
+OPEN_DATA_REQUIRED_COLUMNS = (
+    "CD_YEAR",
+    "CD_TYPE_NL",
+    "CD_REFNIS",
+    "CD_REFNIS_NL",
+    "CD_PERIOD",
+    "CD_CLASS_SURFACE",
+    "MS_TOTAL_TRANSACTIONS",
+    "MS_P_25",
+    "MS_P_50_median",
+    "MS_P_75",
+    "CD_niveau_refnis",
+)
+
+
+def unique_paths(paths: Iterable[Path]) -> list[Path]:
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+    for path in paths:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        ordered.append(path)
+    return ordered
+
+
+RESULT_TARGET_DIRS = unique_paths(
+    [RESULTS_DIR, *DATA_REPO_RESULTS_DIRS] if DATA_REPO_DIR.exists() else [RESULTS_DIR]
+)
+PUBLIC_TARGET_DIRS = unique_paths(
+    [PUBLIC_DATA_DIR, *DATA_REPO_PUBLIC_DIRS] if DATA_REPO_DIR.exists() else [PUBLIC_DATA_DIR]
+)
 
 
 def update_mdx_frontmatter_date(path: Path, date_str: str) -> bool:
@@ -101,309 +169,402 @@ def update_mdx_frontmatter_date(path: Path, date_str: str) -> bool:
     return updated
 
 
-def download_input_zip(url: str, dest: Path) -> Path:
-    """Download a ZIP file from the given URL."""
+def reset_generated_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def write_remote_metadata(url: str, response: requests.Response, content: bytes) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "url": url,
+        "etag": response.headers.get("etag"),
+        "last_modified": response.headers.get("last-modified"),
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
+    REMOTE_METADATA_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def download_input_file(url: str, dest: Path) -> Path:
+    """Download an input file from the given URL."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(url, stream=True, timeout=180) as r:
-        r.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        )
+    }
+    with requests.get(url, headers=headers, stream=True, timeout=180) as response:
+        response.raise_for_status()
+        chunks: list[bytes] = []
+        with open(dest, "wb") as file_handle:
+            for chunk in response.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                file_handle.write(chunk)
+                chunks.append(chunk)
+        write_remote_metadata(url, response, b"".join(chunks))
     return dest
 
 
 def extract_txt_from_zip(zip_path: Path, extract_dir: Path) -> Path:
     """Extract the main TXT file from the ZIP archive."""
     extract_dir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "r") as z:
-        members = z.namelist()
-        candidates = [m for m in members if m.lower().endswith(".txt")]
-        chosen = candidates[0] if candidates else None
-        if not chosen:
-            raise RuntimeError("No .txt file found in ZIP")
-        z.extract(chosen, extract_dir)
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        candidates = [member for member in archive.namelist() if member.lower().endswith(".txt")]
+        if not candidates:
+            raise RuntimeError("No .txt file found in ZIP archive")
+        chosen = candidates[0]
+        archive.extract(chosen, extract_dir)
         return extract_dir / Path(chosen).name
 
 
-def normalize_nis_code(code: str | int | None) -> str | None:
-    """Normalize NIS codes to consistent string format."""
+def normalize_nis_code(code: str | int | float | None) -> str | None:
+    """Normalize NIS codes to consistent zero-padded string format."""
     if code is None or pd.isna(code):
         return None
-    s = str(int(float(code))) if isinstance(code, (float, int)) else str(code).strip()
-    return s if s else None
 
-
-def map_nis_to_region(nis: str | None) -> str | None:
-    """Map NIS code to region code (2000, 3000, 4000)."""
-    if not nis:
-        return None
-    try:
-        code = int(nis)
-    except ValueError:
+    raw = str(code).strip()
+    if not raw:
         return None
 
-    # Flanders: 10000-49999 -> 2000
-    if 10000 <= code < 50000:
-        return "2000"
-    # Wallonia: 50000-99999 -> 3000
-    if 50000 <= code < 100000:
-        return "3000"
-    # Brussels: 21000-21999 -> 4000
-    if 21000 <= code < 22000:
-        return "4000"
-    # Already a region code
-    if code in [1000, 2000, 3000, 4000]:
-        return str(code)
-    return None
+    if re.fullmatch(r"\d+(\.0+)?", raw):
+        raw = str(int(float(raw)))
+
+    if raw.isdigit():
+        return raw.zfill(5)
+
+    return raw
 
 
-def map_nis_to_province(nis: str | None) -> str | None:
-    """Map municipality NIS code to province code."""
-    if not nis:
-        return None
-    try:
-        code = int(nis)
-    except ValueError:
-        return None
-
-    # Province codes are 5 digits starting with 1-4 + 0000
-    # e.g., Antwerpen = 10000, Limburg = 70000, etc.
-    province_map = {
-        range(10000, 13000): "10000",  # Antwerpen
-        range(20000, 25000): "20001",  # Vlaams-Brabant
-        range(30000, 35000): "30000",  # West-Vlaanderen
-        range(40000, 45000): "40000",  # Oost-Vlaanderen
-        range(70000, 73000): "70000",  # Limburg
-        range(21000, 22000): "21000",  # Brussels
-        range(25000, 29000): "20002",  # Waals-Brabant
-        range(50000, 53000): "50000",  # Henegouwen
-        range(55000, 58000): "55000",  # Namen
-        range(60000, 65000): "60000",  # Luik
-        range(80000, 85000): "80000",  # Luxemburg
-    }
-
-    for r, prov in province_map.items():
-        if code in r:
-            return prov
-    return None
+def clean_for_json(records: list[dict]) -> list[dict]:
+    cleaned: list[dict] = []
+    for record in records:
+        clean_record = {}
+        for key, value in record.items():
+            if pd.isna(value):
+                clean_record[key] = None
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                clean_record[key] = int(value) if float(value).is_integer() else float(value)
+            else:
+                clean_record[key] = value
+        cleaned.append(clean_record)
+    return cleaned
 
 
-def process_data() -> None:
-    """Main data processing function."""
-    input_url = os.environ.get("INPUT_URL") or DEFAULT_INPUT_URL
-    input_file_path = os.environ.get("INPUT_FILE_PATH")
-    input_filename = os.environ.get("INPUT_FILENAME") or DEFAULT_ZIP_NAME
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    txt_path: Path | None = None
-    if input_file_path and Path(input_file_path).exists():
-        p = Path(input_file_path)
-        if p.suffix.lower() == ".zip":
-            txt_path = extract_txt_from_zip(p, DATA_DIR)
-        else:
-            txt_path = p
+def serialize_json(payload, *, compact: bool) -> bytes:
+    if compact:
+        text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     else:
-        zip_path = DATA_DIR / input_filename
-        download_input_zip(input_url, zip_path)
-        txt_path = extract_txt_from_zip(zip_path, DATA_DIR)
+        text = json.dumps(payload, ensure_ascii=False, indent=2)
+    return text.encode("utf-8")
 
-    # Read data with latin-1 encoding for special characters
-    df = pd.read_csv(
-        txt_path,
+
+def write_json_to_dirs(relative_path: Path, payload, dirs: Iterable[Path], *, compact: bool = True) -> None:
+    data = serialize_json(payload, compact=compact)
+    for root in dirs:
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+
+def write_text_to_dirs(relative_path: Path, text: str, dirs: Iterable[Path]) -> None:
+    for root in dirs:
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+
+def load_opendata_workbook(workbook_path: Path) -> pd.DataFrame:
+    """Load the Statbel open-data workbook (one sheet per year)."""
+    excel_file = pd.ExcelFile(workbook_path)
+    frames: list[pd.DataFrame] = []
+
+    for sheet_name in excel_file.sheet_names:
+        frame = pd.read_excel(workbook_path, sheet_name=sheet_name)
+        if set(OPEN_DATA_REQUIRED_COLUMNS).issubset(frame.columns):
+            frames.append(frame[list(OPEN_DATA_REQUIRED_COLUMNS)].copy())
+
+    if not frames:
+        raise ValueError(
+            "Unsupported XLSX structure. Expected the Statbel open-data workbook "
+            f"({DEFAULT_INPUT_URL}), but got {workbook_path.name}."
+        )
+
+    return pd.concat(frames, ignore_index=True)
+
+
+def load_pipe_text(path: Path) -> pd.DataFrame:
+    """Load the Statbel pipe-delimited TXT export."""
+    return pd.read_csv(
+        path,
         sep="|",
         encoding="latin-1",
         dtype=str,
         low_memory=False,
     )
 
-    # Normalize NIS codes
-    df["CD_REFNIS"] = df["CD_REFNIS"].apply(normalize_nis_code)
-    df["CD_niveau_refnis"] = pd.to_numeric(df["CD_niveau_refnis"], errors="coerce").astype("Int64")
 
-    # Convert numeric columns
-    for col in ["MS_TOTAL_TRANSACTIONS", "MS_P_25", "MS_P_50_median", "MS_P_75"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+def load_source_dataframe(path: Path) -> pd.DataFrame:
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        return load_opendata_workbook(path)
+    if suffix == ".zip":
+        extracted = extract_txt_from_zip(path, DATA_DIR)
+        return load_pipe_text(extracted)
+    if suffix in {".txt", ".csv"}:
+        return load_pipe_text(path)
+    raise ValueError(f"Unsupported input file format: {path.name}")
 
-    df["CD_YEAR"] = pd.to_numeric(df["CD_YEAR"], errors="coerce").astype("Int64")
 
-    # Map property types to short codes
-    df["property_type"] = df["CD_TYPE_NL"].map(PROPERTY_TYPES)
+def prepare_source_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize, filter, and type-cast the raw Statbel dataframe."""
+    working = df.copy()
 
-    # Update MDX date to latest quarter/year in data
+    if "CD_CLASS_SURFACE" in working.columns:
+        working = working[
+            working["CD_CLASS_SURFACE"].fillna(TOTAL_SURFACE_LABEL).astype(str).str.lower() == TOTAL_SURFACE_LABEL
+        ].copy()
+
+    working["CD_REFNIS"] = working["CD_REFNIS"].apply(normalize_nis_code)
+    working["CD_niveau_refnis"] = pd.to_numeric(working["CD_niveau_refnis"], errors="coerce").astype("Int64")
+    working["CD_YEAR"] = pd.to_numeric(working["CD_YEAR"], errors="coerce").astype("Int64")
+    working["CD_PERIOD"] = working["CD_PERIOD"].astype(str).str.strip()
+
+    for column in ["MS_TOTAL_TRANSACTIONS", "MS_P_25", "MS_P_50_median", "MS_P_75"]:
+        working[column] = pd.to_numeric(working[column], errors="coerce")
+
+    working["property_type"] = working["CD_TYPE_NL"].map(PROPERTY_TYPES)
+    working = working[working["property_type"].notna()].copy()
+    working = working[
+        working["CD_niveau_refnis"].isin([LEVEL_BELGIUM, LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY])
+    ].copy()
+
+    return working
+
+
+def build_datasets(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict, str]:
+    """Build yearly, quarterly, municipality and lookup datasets."""
     max_year = int(df["CD_YEAR"].max())
-    # Find latest quarter for latest year
     latest_year_data = df[df["CD_YEAR"] == max_year]
-    quarters = [q for q in latest_year_data["CD_PERIOD"].unique() if q.startswith("Q")]
+    quarters = sorted({str(period) for period in latest_year_data["CD_PERIOD"].dropna() if str(period).startswith("Q")})
     if quarters:
         latest_quarter = max(quarters)
         quarter_num = int(latest_quarter[1])
-        # Map quarter to month
         quarter_months = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
-        date_str = f"{max_year}-{quarter_months.get(quarter_num, '12-31')}"
+        latest_date = f"{max_year}-{quarter_months.get(quarter_num, '12-31')}"
     else:
-        date_str = f"{max_year}-12-31"
-    update_mdx_frontmatter_date(CONTENT_FILE, date_str)
+        latest_date = f"{max_year}-12-31"
 
-    # ============================================================
-    # Create aggregated datasets
-    # ============================================================
-
-    # 1. Yearly aggregates by property type at different geographic levels
-    # Filter to yearly data only (CD_PERIOD == 'Y') and levels 1-3-5 (Belgium, Region, Province, Municipality)
     yearly_df = df[
-        (df["CD_PERIOD"] == "Y") &
-        (df["CD_niveau_refnis"].isin([LEVEL_BELGIUM, LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY]))
+        (df["CD_PERIOD"] == "Y")
+        & (df["CD_niveau_refnis"].isin([LEVEL_BELGIUM, LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY]))
     ].copy()
 
-    # Aggregate by year, geo level, NIS code, and property type
-    yearly_agg = yearly_df.groupby(
-        ["CD_YEAR", "CD_niveau_refnis", "CD_REFNIS", "property_type"],
-        dropna=False
-    ).agg({
-        "MS_TOTAL_TRANSACTIONS": "sum",
-        "MS_P_50_median": "mean",  # Average of median prices
-        "CD_REFNIS_NL": "first",
-    }).reset_index()
-
-    # Rename columns for compact JSON
-    yearly_agg = yearly_agg.rename(columns={
-        "CD_YEAR": "y",
-        "CD_niveau_refnis": "lvl",
-        "CD_REFNIS": "nis",
-        "property_type": "type",
-        "MS_TOTAL_TRANSACTIONS": "n",
-        "MS_P_50_median": "p50",
-        "CD_REFNIS_NL": "name",
-    })
-
-    # Round price to integers
+    yearly_agg = (
+        yearly_df.groupby(["CD_YEAR", "CD_niveau_refnis", "CD_REFNIS", "property_type"], dropna=False)
+        .agg(
+            {
+                "MS_TOTAL_TRANSACTIONS": "sum",
+                "MS_P_50_median": "mean",
+                "CD_REFNIS_NL": "first",
+            }
+        )
+        .reset_index()
+        .rename(
+            columns={
+                "CD_YEAR": "y",
+                "CD_niveau_refnis": "lvl",
+                "CD_REFNIS": "nis",
+                "property_type": "type",
+                "MS_TOTAL_TRANSACTIONS": "n",
+                "MS_P_50_median": "p50",
+                "CD_REFNIS_NL": "name",
+            }
+        )
+    )
     yearly_agg["p50"] = yearly_agg["p50"].round(0)
 
-    # 2. Quarterly data for all geographic levels (Belgium, Region, Province, Municipality)
     quarterly_df = df[
-        (df["CD_PERIOD"].str.startswith("Q", na=False)) &
-        (df["CD_niveau_refnis"].isin([LEVEL_BELGIUM, LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY]))
+        (df["CD_PERIOD"].str.startswith("Q", na=False))
+        & (df["CD_niveau_refnis"].isin([LEVEL_BELGIUM, LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY]))
     ].copy()
+    quarterly_df["quarter"] = quarterly_df["CD_PERIOD"].str.extract(r"Q(\d)").astype("Int64")
 
-    # Extract quarter number
-    quarterly_df["quarter"] = quarterly_df["CD_PERIOD"].str.extract(r"Q(\d)").astype(int)
+    quarterly_agg = (
+        quarterly_df.groupby(["CD_YEAR", "quarter", "CD_niveau_refnis", "CD_REFNIS", "property_type"], dropna=False)
+        .agg(
+            {
+                "MS_TOTAL_TRANSACTIONS": "sum",
+                "MS_P_50_median": "mean",
+                "MS_P_25": "mean",
+                "MS_P_75": "mean",
+                "CD_REFNIS_NL": "first",
+            }
+        )
+        .reset_index()
+        .rename(
+            columns={
+                "CD_YEAR": "y",
+                "quarter": "q",
+                "CD_niveau_refnis": "lvl",
+                "CD_REFNIS": "nis",
+                "property_type": "type",
+                "MS_TOTAL_TRANSACTIONS": "n",
+                "MS_P_50_median": "p50",
+                "MS_P_25": "p25",
+                "MS_P_75": "p75",
+                "CD_REFNIS_NL": "name",
+            }
+        )
+    )
+    for column in ["p50", "p25", "p75"]:
+        quarterly_agg[column] = quarterly_agg[column].round(0)
 
-    quarterly_agg = quarterly_df.groupby(
-        ["CD_YEAR", "quarter", "CD_niveau_refnis", "CD_REFNIS", "property_type"],
-        dropna=False
-    ).agg({
-        "MS_TOTAL_TRANSACTIONS": "sum",
-        "MS_P_50_median": "mean",
-        "MS_P_25": "mean",
-        "MS_P_75": "mean",
-        "CD_REFNIS_NL": "first",
-    }).reset_index()
+    municipalities = (
+        yearly_agg[yearly_agg["lvl"] == LEVEL_MUNICIPALITY][["nis", "name", "y", "type", "n", "p50"]]
+        .sort_values(["y", "name", "type"])
+        .reset_index(drop=True)
+    )
 
-    quarterly_agg = quarterly_agg.rename(columns={
-        "CD_YEAR": "y",
-        "quarter": "q",
-        "CD_niveau_refnis": "lvl",
-        "CD_REFNIS": "nis",
-        "property_type": "type",
-        "MS_TOTAL_TRANSACTIONS": "n",
-        "MS_P_50_median": "p50",
-        "MS_P_25": "p25",
-        "MS_P_75": "p75",
-        "CD_REFNIS_NL": "name",
-    })
-
-    # Round prices
-    for col in ["p50", "p25", "p75"]:
-        quarterly_agg[col] = quarterly_agg[col].round(0)
-
-    # 3. Create lookups for geographic entities
     geo_lookup = df[
-        df["CD_niveau_refnis"].isin([LEVEL_BELGIUM, LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY])
+        df["CD_niveau_refnis"].isin([LEVEL_REGION, LEVEL_PROVINCE, LEVEL_MUNICIPALITY])
     ][["CD_REFNIS", "CD_REFNIS_NL", "CD_niveau_refnis"]].drop_duplicates()
 
     lookups = {
-        "property_types": [
-            {"code": v, "nl": k}
-            for k, v in PROPERTY_TYPES.items()
-        ],
+        "property_types": [{"code": code, "nl": label} for label, code in PROPERTY_TYPES.items()],
         "regions": [
-            {"code": row["CD_REFNIS"], "name": row["CD_REFNIS_NL"]}
-            for _, row in geo_lookup[geo_lookup["CD_niveau_refnis"] == LEVEL_REGION].iterrows()
+            {"code": normalize_nis_code(row["CD_REFNIS"]), "name": row["CD_REFNIS_NL"]}
+            for _, row in geo_lookup[geo_lookup["CD_niveau_refnis"] == LEVEL_REGION].sort_values("CD_REFNIS").iterrows()
         ],
         "provinces": [
-            {"code": row["CD_REFNIS"], "name": row["CD_REFNIS_NL"]}
-            for _, row in geo_lookup[geo_lookup["CD_niveau_refnis"] == LEVEL_PROVINCE].iterrows()
+            {"code": normalize_nis_code(row["CD_REFNIS"]), "name": row["CD_REFNIS_NL"]}
+            for _, row in geo_lookup[geo_lookup["CD_niveau_refnis"] == LEVEL_PROVINCE].sort_values("CD_REFNIS").iterrows()
         ],
         "municipalities": [
-            {"code": row["CD_REFNIS"], "name": row["CD_REFNIS_NL"]}
-            for _, row in geo_lookup[geo_lookup["CD_niveau_refnis"] == LEVEL_MUNICIPALITY].iterrows()
+            {"code": normalize_nis_code(row["CD_REFNIS"]), "name": row["CD_REFNIS_NL"]}
+            for _, row in geo_lookup[geo_lookup["CD_niveau_refnis"] == LEVEL_MUNICIPALITY].sort_values("CD_REFNIS_NL").iterrows()
         ],
     }
 
-    # ============================================================
-    # Write output files
-    # ============================================================
+    return yearly_agg, quarterly_agg, municipalities, lookups, latest_date
 
-    # Clean up NaN values for JSON serialization
-    def clean_for_json(records):
-        cleaned = []
-        for r in records:
-            clean_r = {}
-            for k, v in r.items():
-                if pd.isna(v):
-                    clean_r[k] = None
-                elif isinstance(v, (int, float)) and not isinstance(v, bool):
-                    if v != v:  # Check for NaN
-                        clean_r[k] = None
-                    else:
-                        clean_r[k] = int(v) if float(v).is_integer() else float(v)
-                else:
-                    clean_r[k] = v
-            cleaned.append(clean_r)
-        return cleaned
 
+def chunk_quarterly_records(records: list[dict]) -> tuple[list[dict], int]:
+    total_records = len(records)
+    if total_records == 0:
+        return [], 1
+
+    estimated_size = len(serialize_json(records, compact=True))
+    avg_record_size = max(1, estimated_size / total_records)
+    records_per_chunk = max(1, int((TARGET_CHUNK_SIZE_MB * BYTES_PER_MB) / avg_record_size))
+    num_chunks = max(1, math.ceil(total_records / records_per_chunk))
+
+    chunks: list[dict] = []
+    for index in range(num_chunks):
+        start_idx = index * records_per_chunk
+        end_idx = min((index + 1) * records_per_chunk, total_records)
+        chunk_records = records[start_idx:end_idx]
+        chunk_bytes = serialize_json(chunk_records, compact=True)
+        chunk_path = Path(f"quarterly_chunk_{index}.json")
+        write_json_to_dirs(chunk_path, chunk_records, PUBLIC_TARGET_DIRS, compact=True)
+        chunks.append(
+            {
+                "index": index,
+                "filename": chunk_path.name,
+                "records": len(chunk_records),
+                "size_mb": len(chunk_bytes) / BYTES_PER_MB,
+            }
+        )
+
+    return chunks, records_per_chunk
+
+
+def export_results(yearly_agg: pd.DataFrame, quarterly_agg: pd.DataFrame, municipalities: pd.DataFrame, lookups: dict, input_url: str, latest_date: str) -> None:
     yearly_records = clean_for_json(yearly_agg.to_dict(orient="records"))
     quarterly_records = clean_for_json(quarterly_agg.to_dict(orient="records"))
+    municipalities_records = clean_for_json(municipalities.to_dict(orient="records"))
 
-    (RESULTS_DIR / "yearly.json").write_text(
-        json.dumps(yearly_records, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    for directory in RESULT_TARGET_DIRS:
+        directory.mkdir(parents=True, exist_ok=True)
+    for directory in PUBLIC_TARGET_DIRS:
+        reset_generated_dir(directory)
 
-    (RESULTS_DIR / "quarterly.json").write_text(
-        json.dumps(quarterly_records, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    years = sorted(int(year) for year in yearly_agg["y"].dropna().unique().tolist())
+    chunks_metadata, records_per_chunk = chunk_quarterly_records(quarterly_records)
 
-    (RESULTS_DIR / "lookups.json").write_text(
-        json.dumps(lookups, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
-
-    # Also write CSV versions
-    yearly_agg.to_csv(RESULTS_DIR / "yearly.csv", index=False)
-    quarterly_agg.to_csv(RESULTS_DIR / "quarterly.csv", index=False)
-
-    # Write metadata
     metadata = {
         "source_url": input_url,
-        "latest_year": max_year,
-        "latest_date": date_str,
+        "source_page_url": SOURCE_PAGE_URL,
+        "source_open_data_url": DEFAULT_INPUT_URL,
+        "source_direct_municipality_url": DIRECT_MUNICIPALITY_XLSX_URL,
+        "open_data_page_url": OPEN_DATA_PAGE_URL,
+        "latest_year": years[-1] if years else None,
+        "latest_date": latest_date,
         "property_types": list(PROPERTY_TYPES.values()),
-        "years": sorted(df["CD_YEAR"].dropna().unique().tolist()),
+        "years": years,
+        "quarterly_chunks": len(chunks_metadata),
+        "total_records": len(quarterly_records),
+        "records_per_chunk": records_per_chunk,
+        "chunks": chunks_metadata,
     }
-    (RESULTS_DIR / "metadata.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
 
-    print(f"Processed {len(df)} rows")
+    write_json_to_dirs(Path("yearly.json"), yearly_records, RESULT_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("quarterly.json"), quarterly_records, RESULT_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("municipalities.json"), municipalities_records, RESULT_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("lookups.json"), lookups, RESULT_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("metadata.json"), metadata, RESULT_TARGET_DIRS, compact=False)
+
+    write_json_to_dirs(Path("yearly.json"), yearly_records, PUBLIC_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("municipalities.json"), municipalities_records, PUBLIC_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("lookups.json"), lookups, PUBLIC_TARGET_DIRS, compact=True)
+    write_json_to_dirs(Path("metadata.json"), metadata, PUBLIC_TARGET_DIRS, compact=False)
+
+    yearly_csv = yearly_agg.to_csv(index=False)
+    quarterly_csv = quarterly_agg.to_csv(index=False)
+    write_text_to_dirs(Path("yearly.csv"), yearly_csv, RESULT_TARGET_DIRS)
+    write_text_to_dirs(Path("quarterly.csv"), quarterly_csv, RESULT_TARGET_DIRS)
+
     print(f"Yearly records: {len(yearly_records)}")
     print(f"Quarterly records: {len(quarterly_records)}")
-    print(f"Latest data: {date_str}")
+    print(f"Municipality map records: {len(municipalities_records)}")
+    print(f"Quarterly chunks: {len(chunks_metadata)}")
+
+
+def resolve_input_path() -> tuple[Path, str]:
+    input_url = os.environ.get("INPUT_URL") or DEFAULT_INPUT_URL
+    input_file_path = os.environ.get("INPUT_FILE_PATH")
+    input_filename = os.environ.get("INPUT_FILENAME") or Path(input_url).name or DEFAULT_INPUT_FILENAME
+
+    if input_file_path:
+        path = Path(input_file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"INPUT_FILE_PATH does not exist: {input_file_path}")
+        return path, input_url
+
+    download_path = DATA_DIR / input_filename
+    return download_input_file(input_url, download_path), input_url
+
+
+def process_data() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    input_path, input_url = resolve_input_path()
+    raw_df = load_source_dataframe(input_path)
+    prepared_df = prepare_source_dataframe(raw_df)
+    yearly_agg, quarterly_agg, municipalities, lookups, latest_date = build_datasets(prepared_df)
+
+    update_mdx_frontmatter_date(CONTENT_FILE, latest_date)
+    export_results(yearly_agg, quarterly_agg, municipalities, lookups, input_url, latest_date)
+
+    print(f"Processed {len(prepared_df)} Statbel rows from {input_path.name}")
+    print(f"Latest data: {latest_date}")
+    print(f"Output written to: {RESULTS_DIR}")
+    if DATA_REPO_DIR.exists():
+        print(f"Mirrored to split data repo: {DATA_REPO_DIR}")
 
 
 if __name__ == "__main__":
