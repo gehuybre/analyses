@@ -19,6 +19,7 @@ function joinBaseAndPath(base: string, normalizedPath: string): string {
   const pathSegments = splitPathSegments(normalizedPath)
 
   if (
+    !isAbsoluteUrl &&
     baseSegments.length > 0 &&
     pathSegments.length > 0 &&
     baseSegments[baseSegments.length - 1] === pathSegments[0]
