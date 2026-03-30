@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandItem,
   CommandList,
@@ -47,6 +46,20 @@ type TypeRow = { y: number; t: string; p: number; g: number; w: number; m2: numb
 type SloopQuarterlyRow = { y: number; q: number; p: number; g: number; m2: number; m3: number }
 type SloopYearlyRow = { y: number; p: number; g: number; m2: number; m3: number }
 type SloopBesluitRow = { y: number; b: string; p: number; g: number; m2: number; m3: number }
+type HandelingCode = "nieuwbouw" | "verbouw" | "sloop"
+type ApplicantCode = "natuurlijk_persoon" | "rechtspersoon" | "gemengd" | "andere"
+type ApplicantMetricCode = MetricCode | "dm2" | "m3"
+type ApplicantRow = {
+  y: number
+  h: HandelingCode
+  a: ApplicantCode
+  p: number
+  g: number
+  w: number
+  m2: number
+  dm2: number
+  m3: number
+}
 
 type MetricCode = "p" | "g" | "w" | "m2"
 type SloopMetricCode = "p" | "g" | "m2" | "m3"
@@ -65,6 +78,13 @@ const SLOOP_METRIC_LABELS: Record<SloopMetricCode, string> = {
   m3: "Gesloopt volume (m³)",
 }
 
+const APPLICANT_NON_SLOOP_METRIC_LABELS = {
+  p: "Projecten",
+  g: "Gebouwen",
+  w: "Wooneenheden",
+  m2: "Nuttige woonoppervlakte (m²)",
+} as const
+
 let nieuwbouwQuarterly: QuarterlyRow[] = []
 let nieuwbouwYearly: YearlyRow[] = []
 let nieuwbouwByType: TypeRow[] = []
@@ -74,6 +94,7 @@ let verbouwByType: TypeRow[] = []
 let sloopQuarterly: SloopQuarterlyRow[] = []
 let sloopYearly: SloopYearlyRow[] = []
 let sloopByBesluit: SloopBesluitRow[] = []
+let aanvragerYearly: ApplicantRow[] = []
 
 // Standardized colors using CSS variables
 const TYPE_COLORS: Record<string, string> = {
@@ -88,6 +109,34 @@ const TYPE_LABELS: Record<string, string> = {
   kamer: "Kamerwoning",
 }
 
+const HANDELING_LABELS: Record<HandelingCode, string> = {
+  nieuwbouw: "Nieuwbouw",
+  verbouw: "Verbouw",
+  sloop: "Sloop",
+}
+
+const AANVRAGER_HANDELING_LABELS = {
+  nieuwbouw: "Nieuwbouw",
+  verbouw: "Verbouw",
+} as const
+
+const APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "gemengd", "andere"]
+const VISIBLE_APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "gemengd"]
+
+const APPLICANT_COLORS: Record<ApplicantCode, string> = {
+  natuurlijk_persoon: "var(--color-chart-1)",
+  rechtspersoon: "var(--color-chart-2)",
+  gemengd: "var(--color-chart-3)",
+  andere: "var(--color-chart-4)",
+}
+
+const APPLICANT_LABELS: Record<ApplicantCode, string> = {
+  natuurlijk_persoon: "Natuurlijk persoon",
+  rechtspersoon: "Rechtspersoon",
+  gemengd: "Gemengd",
+  andere: "Andere / onbekend",
+}
+
 function formatInt(n: number) {
   return new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 }).format(n)
 }
@@ -95,6 +144,10 @@ function formatInt(n: number) {
 function formatPct(n: number) {
   const sign = n >= 0 ? "+" : ""
   return `${sign}${n.toFixed(1)}%`
+}
+
+function formatShare(n: number) {
+  return `${n.toFixed(1)}%`
 }
 
 // Metric selector component
@@ -866,6 +919,323 @@ function VerbouwSection() {
 }
 
 // ============================================================================
+// PROJECT AANVRAGER TYPE SECTION
+// ============================================================================
+
+function AanvragerSection() {
+  const [handeling, setHandeling] = React.useState<keyof typeof AANVRAGER_HANDELING_LABELS>("nieuwbouw")
+  const [metric, setMetric] = React.useState<ApplicantMetricCode>("w")
+
+  const rows = React.useMemo(
+    () => (aanvragerYearly as ApplicantRow[]).filter((row) => row.h === handeling),
+    [handeling]
+  )
+  const visibleRows = React.useMemo(
+    () => rows.filter((row) => VISIBLE_APPLICANT_ORDER.includes(row.a)),
+    [rows]
+  )
+
+  const years = React.useMemo(
+    () => [...new Set(rows.map((row) => row.y))].sort((a, b) => a - b),
+    [rows]
+  )
+
+  const currentYear = years[years.length - 1] ?? 0
+  const previousYear = years[years.length - 2] ?? currentYear - 1
+
+  const currentRows = visibleRows.filter((row) => row.y === currentYear)
+  const previousRows = visibleRows.filter((row) => row.y === previousYear)
+
+  const currentTotal = currentRows.reduce((sum, row) => sum + row[metric], 0)
+  const previousTotal = previousRows.reduce((sum, row) => sum + row[metric], 0)
+  const change = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : 0
+
+  const dominantApplicant = currentRows.reduce<ApplicantRow | null>((best, row) => {
+    if (!best || row[metric] > best[metric]) return row
+    return best
+  }, null)
+  const dominantShare = dominantApplicant && currentTotal > 0 ? (dominantApplicant[metric] / currentTotal) * 100 : 0
+
+  const valueLabel = React.useMemo(() => {
+    return APPLICANT_NON_SLOOP_METRIC_LABELS[metric as keyof typeof APPLICANT_NON_SLOOP_METRIC_LABELS] ?? "Waarde"
+  }, [metric])
+
+  const yearlyData = React.useMemo(() => {
+    return years.map((year) => {
+      const row: Record<string, string | number> = { jaar: year }
+      for (const applicant of APPLICANT_ORDER) {
+        const found = rows.find((entry) => entry.y === year && entry.a === applicant)
+        row[APPLICANT_LABELS[applicant]] = found ? found[metric] : 0
+      }
+      return row
+    })
+  }, [years, rows, metric])
+
+  const shareData = React.useMemo(() => {
+    return yearlyData.map((row) => {
+      const total = VISIBLE_APPLICANT_ORDER.reduce(
+        (sum, applicant) => sum + Number(row[APPLICANT_LABELS[applicant]] ?? 0),
+        0
+      )
+      const shareRow: Record<string, string | number> = { jaar: row.jaar }
+      for (const applicant of VISIBLE_APPLICANT_ORDER) {
+        const value = Number(row[APPLICANT_LABELS[applicant]] ?? 0)
+        shareRow[APPLICANT_LABELS[applicant]] = total > 0 ? (value / total) * 100 : 0
+      }
+      return shareRow
+    })
+  }, [yearlyData])
+
+  const yearlyExportData = React.useMemo(() => {
+    return yearlyData.flatMap((row) =>
+      VISIBLE_APPLICANT_ORDER.map((applicant) => ({
+        label: `${row.jaar} - ${APPLICANT_LABELS[applicant]}`,
+        value: Number(row[APPLICANT_LABELS[applicant]] ?? 0),
+        periodCells: [row.jaar as number, APPLICANT_LABELS[applicant]],
+      }))
+    )
+  }, [yearlyData])
+
+  const shareExportData = React.useMemo(() => {
+    return shareData.flatMap((row) =>
+      VISIBLE_APPLICANT_ORDER.map((applicant) => ({
+        label: `${row.jaar} - ${APPLICANT_LABELS[applicant]}`,
+        value: Number(row[APPLICANT_LABELS[applicant]] ?? 0),
+        periodCells: [row.jaar as number, APPLICANT_LABELS[applicant]],
+      }))
+    )
+  }, [shareData])
+
+  const yearlyTotals = React.useMemo(() => {
+    return yearlyData.map((row) =>
+      VISIBLE_APPLICANT_ORDER.reduce((sum, applicant) => sum + Number(row[APPLICANT_LABELS[applicant]] ?? 0), 0)
+    )
+  }, [yearlyData])
+
+  const yearlyYAxis = React.useMemo(() => {
+    return createYAxisLabelConfig(yearlyTotals, valueLabel, false)
+  }, [yearlyTotals, valueLabel])
+
+  const tableData = React.useMemo(() => {
+    return yearlyData.map((row) => ({
+      jaar: row.jaar as number,
+      natuurlijkPersoon: Number(row[APPLICANT_LABELS.natuurlijk_persoon] ?? 0),
+      rechtspersoon: Number(row[APPLICANT_LABELS.rechtspersoon] ?? 0),
+      gemengd: Number(row[APPLICANT_LABELS.gemengd] ?? 0),
+      andere: Number(row[APPLICANT_LABELS.andere] ?? 0),
+    }))
+  }, [yearlyData])
+
+  const shareTableData = React.useMemo(() => {
+    return shareData.map((row) => ({
+      jaar: row.jaar as number,
+      natuurlijkPersoon: Number(row[APPLICANT_LABELS.natuurlijk_persoon] ?? 0),
+      rechtspersoon: Number(row[APPLICANT_LABELS.rechtspersoon] ?? 0),
+      gemengd: Number(row[APPLICANT_LABELS.gemengd] ?? 0),
+    }))
+  }, [shareData])
+
+  return (
+    <TimeSeriesSection
+      title="Project Aanvrager Type"
+      slug="vergunningen-aanvragen"
+      sectionId="aanvrager"
+      dataSource="Omgevingsloket Vlaanderen"
+      dataSourceUrl="https://omgevingsloketrapportering.omgeving.vlaanderen.be/wonen"
+      defaultView="yearly"
+      headerContent={
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="text-sm text-muted-foreground">{valueLabel} {currentYear}</div>
+              <div className="text-2xl font-bold">{currentYear ? formatInt(currentTotal) : "-"}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="text-sm text-muted-foreground">vs {previousYear}</div>
+              <div className={cn("text-2xl font-bold", change >= 0 ? "text-green-600" : "text-red-600")}>
+                {formatPct(change)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="col-span-2 md:col-span-1">
+            <CardContent className="pt-4">
+              <div className="text-sm text-muted-foreground">Dominant type {currentYear}</div>
+              <div className="text-lg font-bold">
+                {dominantApplicant ? APPLICANT_LABELS[dominantApplicant.a] : "-"}
+              </div>
+              <div className="text-sm text-muted-foreground">{dominantApplicant ? formatPct(dominantShare) : "-"}</div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+      rightControls={
+        <>
+          <MetricSelector selected={handeling} onChange={setHandeling} labels={AANVRAGER_HANDELING_LABELS} />
+          <MetricSelector
+            selected={metric as keyof typeof APPLICANT_NON_SLOOP_METRIC_LABELS}
+            onChange={(value) => setMetric(value as ApplicantMetricCode)}
+            labels={APPLICANT_NON_SLOOP_METRIC_LABELS}
+          />
+        </>
+      }
+      views={[
+        {
+          value: "yearly",
+          label: "Per jaar",
+          exportData: yearlyExportData,
+          exportMeta: {
+            viewType: "chart",
+            periodHeaders: ["Jaar", "Aanvrager"],
+            valueLabel,
+            embedParams: { handeling, metric, timeRange: "yearly", subView: "aanvrager" },
+          },
+          content: (
+            <Card>
+              <CardHeader><CardTitle>{HANDELING_LABELS[handeling]} per project aanvrager type</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-sm font-medium ml-16 mb-1">
+                  {yearlyYAxis.label.text}
+                  <span className="font-bold">{yearlyYAxis.label.boldText}</span>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={yearlyData} margin={CHART_THEME.margin}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.gridStroke} vertical={false} />
+                    <XAxis dataKey="jaar" fontSize={CHART_THEME.fontSize} tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={yearlyYAxis.formatter} fontSize={CHART_THEME.fontSize} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      formatter={(value: number | undefined) => value !== undefined ? formatInt(value) : ""}
+                      contentStyle={CHART_THEME.tooltip}
+                      cursor={{ fill: "var(--muted)", opacity: 0.2 }}
+                    />
+                    <Legend iconType="circle" />
+                    <Bar dataKey={APPLICANT_LABELS.natuurlijk_persoon} fill={APPLICANT_COLORS.natuurlijk_persoon} stackId="a" />
+                    <Bar dataKey={APPLICANT_LABELS.rechtspersoon} fill={APPLICANT_COLORS.rechtspersoon} stackId="a" />
+                    <Bar dataKey={APPLICANT_LABELS.gemengd} fill={APPLICANT_COLORS.gemengd} stackId="a" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          ),
+        },
+        {
+          value: "share",
+          label: "Aandeel",
+          exportData: shareExportData,
+          exportMeta: {
+            viewType: "chart",
+            periodHeaders: ["Jaar", "Aanvrager"],
+            valueLabel: "Aandeel (%)",
+            embedParams: { handeling, metric, timeRange: "yearly", subView: "share" },
+          },
+          content: (
+            <Card>
+              <CardHeader><CardTitle>Aandeel per project aanvrager type</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-sm font-medium ml-16 mb-1">Aandeel <span className="font-bold">(%)</span></div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={shareData} margin={CHART_THEME.margin}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.gridStroke} vertical={false} />
+                    <XAxis dataKey="jaar" fontSize={CHART_THEME.fontSize} tickLine={false} axisLine={false} />
+                    <YAxis
+                      domain={[0, 100]}
+                      tickFormatter={(value: number) => `${value}%`}
+                      fontSize={CHART_THEME.fontSize}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      formatter={(value: number | undefined) => value !== undefined ? `${value.toFixed(1)}%` : ""}
+                      contentStyle={CHART_THEME.tooltip}
+                      cursor={{ fill: "var(--muted)", opacity: 0.2 }}
+                    />
+                    <Legend iconType="circle" />
+                    <Bar dataKey={APPLICANT_LABELS.natuurlijk_persoon} fill={APPLICANT_COLORS.natuurlijk_persoon} stackId="a" />
+                    <Bar dataKey={APPLICANT_LABELS.rechtspersoon} fill={APPLICANT_COLORS.rechtspersoon} stackId="a" />
+                    <Bar dataKey={APPLICANT_LABELS.gemengd} fill={APPLICANT_COLORS.gemengd} stackId="a" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          ),
+        },
+        {
+          value: "table",
+          label: "Tabel",
+          exportData: yearlyExportData,
+          exportMeta: {
+            viewType: "table",
+            periodHeaders: ["Jaar", "Aanvrager"],
+            valueLabel,
+            embedParams: { handeling, metric, timeRange: "yearly", subView: "aanvrager" },
+          },
+          content: (
+            <Card>
+              <CardHeader><CardTitle>{HANDELING_LABELS[handeling]} per aanvragertype</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-muted-foreground">Absolute waarden</div>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Jaar</TableHead>
+                            <TableHead className="text-right">Natuurlijk persoon</TableHead>
+                            <TableHead className="text-right">Rechtspersoon</TableHead>
+                            <TableHead className="text-right">Gemengd</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {tableData.map((row) => (
+                            <TableRow key={row.jaar}>
+                              <TableCell className="font-medium">{row.jaar}</TableCell>
+                              <TableCell className="text-right">{formatInt(row.natuurlijkPersoon)}</TableCell>
+                              <TableCell className="text-right">{formatInt(row.rechtspersoon)}</TableCell>
+                              <TableCell className="text-right">{formatInt(row.gemengd)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-muted-foreground">Aandeel (%)</div>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Jaar</TableHead>
+                            <TableHead className="text-right">Natuurlijk persoon</TableHead>
+                            <TableHead className="text-right">Rechtspersoon</TableHead>
+                            <TableHead className="text-right">Gemengd</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {shareTableData.map((row) => (
+                            <TableRow key={row.jaar}>
+                              <TableCell className="font-medium">{row.jaar}</TableCell>
+                              <TableCell className="text-right">{formatShare(row.natuurlijkPersoon)}</TableCell>
+                              <TableCell className="text-right">{formatShare(row.rechtspersoon)}</TableCell>
+                              <TableCell className="text-right">{formatShare(row.gemengd)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ),
+        },
+      ]}
+    />
+  )
+}
+
+// ============================================================================
 // SLOOP SECTION
 // ============================================================================
 
@@ -1197,6 +1567,7 @@ function InnerDashboard() {
     sloopQuarterly: SloopQuarterlyRow[]
     sloopYearly: SloopYearlyRow[]
     sloopByBesluit: SloopBesluitRow[]
+    aanvragerYearly: ApplicantRow[]
   }>({
     nieuwbouwQuarterly: "/data/vergunningen-aanvragen/nieuwbouw_quarterly.json",
     nieuwbouwYearly: "/data/vergunningen-aanvragen/nieuwbouw_yearly.json",
@@ -1207,6 +1578,7 @@ function InnerDashboard() {
     sloopQuarterly: "/data/vergunningen-aanvragen/sloop_quarterly.json",
     sloopYearly: "/data/vergunningen-aanvragen/sloop_yearly.json",
     sloopByBesluit: "/data/vergunningen-aanvragen/sloop_by_besluit.json",
+    aanvragerYearly: "/data/vergunningen-aanvragen/aanvrager_yearly.json",
   })
 
   if (loading) {
@@ -1230,6 +1602,7 @@ function InnerDashboard() {
   sloopQuarterly = bundle.sloopQuarterly
   sloopYearly = bundle.sloopYearly
   sloopByBesluit = bundle.sloopByBesluit
+  aanvragerYearly = bundle.aanvragerYearly
 
   return (
     <div className="space-y-12">
@@ -1237,12 +1610,16 @@ function InnerDashboard() {
         <p>
           Deze analyse toont de vergunningsaanvragen voor woningen in Vlaanderen, gebaseerd op
           data van het Omgevingsloket. De cijfers zijn opgedeeld in drie categorieën: nieuwbouw,
-          verbouw (renovatie/hergebruik), en sloop. Selecteer een metriek per sectie om de data
-          te verkennen.
+          verbouw (renovatie/hergebruik), en sloop, aangevuld met een jaarlijkse uitsplitsing
+          naar project aanvrager type. Selecteer een metriek per sectie om de data te verkennen.
         </p>
       </div>
 
-      <NieuwbouwSection />
+      <AanvragerSection />
+
+      <div className="border-t pt-8">
+        <NieuwbouwSection />
+      </div>
 
       <div className="border-t pt-8">
         <VerbouwSection />

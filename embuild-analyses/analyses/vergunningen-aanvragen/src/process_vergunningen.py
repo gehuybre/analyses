@@ -7,6 +7,7 @@ Output structure:
 - nieuwbouw_*.json - New construction data
 - verbouw_*.json - Renovation data
 - sloop_*.json - Demolition data
+- aanvrager_yearly.json - Project applicant type data
 """
 
 import pandas as pd
@@ -29,10 +30,28 @@ RESULTS_DIR.mkdir(exist_ok=True)
 PUBLIC_DATA_DIR = Path(__file__).parent.parent.parent.parent / "public" / "data" / "vergunningen-aanvragen"
 PUBLIC_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Read CSV
+def simplify_handeling(h):
+    if h == "Nieuwbouw":
+        return "nieuwbouw"
+    if h == "Verbouwen of hergebruik":
+        return "verbouw"
+    if h == "Sloop":
+        return "sloop"
+    return "onbekend"
+
+def group_aanvrager(a):
+    if a == "Natuurlijk persoon":
+        return "natuurlijk_persoon"
+    if a == "Rechtspersoon":
+        return "rechtspersoon"
+    if a == "Natuurlijk persoon-Rechtspersoon":
+        return "gemengd"
+    return "andere"
+
+# Read main CSV
 df = pd.read_csv(
     DATA_DIR / "bouwen_of_verbouwen_van_woningen.csv",
-    encoding="utf-8",
+    encoding="utf-8-sig",
     decimal=",",
     thousands="."
 )
@@ -88,6 +107,41 @@ woningen_functies = [
     "eengezins- en kamerwoning",
     "meergezins- en kamerwoning"
 ]
+
+# Read yearly applicant type CSV and align to the main analysis period
+df_aanvrager = pd.read_csv(
+    DATA_DIR / "Kopie van bouwstatistieken_met type aanvrager_2026.csv",
+    sep=";",
+    encoding="utf-8-sig",
+    decimal=",",
+    thousands="."
+)
+
+df_aanvrager.columns = [
+    "jaar",
+    "gebouw_functie",
+    "handeling",
+    "aanvrager_type",
+    "aantal_projecten",
+    "aantal_gebouwen",
+    "aantal_gebouwen_info",
+    "aantal_wooneenheden",
+    "aantal_kamers",
+    "woonoppervlakte_m2",
+    "oppervlakte_kamerwoning_m2",
+    "bovengronds_nuttig_m2",
+    "bovengronds_grond_m2",
+    "gesloopt_m2",
+    "gesloopt_m3",
+    "project_toestand",
+]
+
+df_aanvrager["jaar"] = df_aanvrager["jaar"].astype(int)
+df_aanvrager = df_aanvrager[df_aanvrager["jaar"] <= df["jaar"].max()].copy()
+df_aanvrager["gebouw_functie"] = df_aanvrager["gebouw_functie"].replace("-", "Onbekend")
+df_aanvrager["handeling"] = df_aanvrager["handeling"].replace("-", "Onbekend")
+df_aanvrager["aanvrager_type"] = df_aanvrager["aanvrager_type"].replace("-", "Onbekend")
+df_aanvrager["aanvrager_groep"] = df_aanvrager["aanvrager_type"].apply(group_aanvrager)
 
 # ============================================================================
 # SECTION 1: NIEUWBOUW (New Construction)
@@ -234,6 +288,36 @@ write_json("sloop_by_besluit.json", [
 ])
 
 # ============================================================================
+# SECTION 4: PROJECT AANVRAGER TYPE
+# ============================================================================
+
+df_aanvrager_woningen = df_aanvrager[df_aanvrager["gebouw_functie"].isin(woningen_functies)].copy()
+
+aanvrager_yearly = df_aanvrager_woningen.groupby(["jaar", "handeling", "aanvrager_groep"]).agg({
+    "aantal_projecten": "sum",
+    "aantal_gebouwen": "sum",
+    "aantal_wooneenheden": "sum",
+    "woonoppervlakte_m2": "sum",
+    "gesloopt_m2": "sum",
+    "gesloopt_m3": "sum",
+}).reset_index().sort_values(["handeling", "jaar", "aanvrager_groep"])
+
+write_json("aanvrager_yearly.json", [
+    {
+        "y": int(r["jaar"]),
+        "h": simplify_handeling(r["handeling"]),
+        "a": r["aanvrager_groep"],
+        "p": int(r["aantal_projecten"]),
+        "g": int(r["aantal_gebouwen"]),
+        "w": int(r["aantal_wooneenheden"]),
+        "m2": round(r["woonoppervlakte_m2"], 0),
+        "dm2": round(r["gesloopt_m2"], 0),
+        "m3": round(r["gesloopt_m3"], 0),
+    }
+    for _, r in aanvrager_yearly.iterrows()
+])
+
+# ============================================================================
 # LOOKUPS for UI
 # ============================================================================
 
@@ -249,6 +333,17 @@ lookups = {
         {"code": "Vlaamse Overheid", "nl": "Vlaamse Overheid"},
         {"code": "RVVB", "nl": "RVVB"},
         {"code": "Onbekend", "nl": "Onbekend"}
+    ],
+    "handelingen": [
+        {"code": "nieuwbouw", "nl": "Nieuwbouw"},
+        {"code": "verbouw", "nl": "Verbouwen"},
+        {"code": "sloop", "nl": "Sloop"}
+    ],
+    "aanvrager_types": [
+        {"code": "natuurlijk_persoon", "nl": "Natuurlijk persoon"},
+        {"code": "rechtspersoon", "nl": "Rechtspersoon"},
+        {"code": "gemengd", "nl": "Natuurlijk persoon + rechtspersoon"},
+        {"code": "andere", "nl": "Andere / onbekend"}
     ]
 }
 

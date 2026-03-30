@@ -34,5 +34,37 @@
       "code": "Onbekend",
       "nl": "Onbekend"
     }
+  ],
+  "handelingen": [
+    {
+      "code": "nieuwbouw",
+      "nl": "Nieuwbouw"
+    },
+    {
+      "code": "verbouw",
+      "nl": "Verbouwen"
+    },
+    {
+      "code": "sloop",
+      "nl": "Sloop"
+    }
+  ],
+  "aanvrager_types": [
+    {
+      "code": "natuurlijk_persoon",
+      "nl": "Natuurlijk persoon"
+    },
+    {
+      "code": "rechtspersoon",
+      "nl": "Rechtspersoon"
+    },
+    {
+      "code": "gemengd",
+      "nl": "Natuurlijk persoon + rechtspersoon"
+    },
+    {
+      "code": "andere",
+      "nl": "Andere / onbekend"
+    }
   ]
 }

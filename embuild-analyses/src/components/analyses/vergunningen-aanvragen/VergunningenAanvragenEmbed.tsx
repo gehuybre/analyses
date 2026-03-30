@@ -11,6 +11,20 @@ type TypeRow = { y: number; t: string; p: number; g: number; w: number; m2: numb
 type SloopQuarterlyRow = { y: number; q: number; p: number; g: number; m2: number; m3: number }
 type SloopYearlyRow = { y: number; p: number; g: number; m2: number; m3: number }
 type SloopBesluitRow = { y: number; b: string; p: number; g: number; m2: number; m3: number }
+type HandelingCode = "nieuwbouw" | "verbouw" | "sloop"
+type ApplicantCode = "natuurlijk_persoon" | "rechtspersoon" | "gemengd" | "andere"
+type ApplicantMetricCode = MetricCode | "dm2" | "m3"
+type ApplicantRow = {
+  y: number
+  h: HandelingCode
+  a: ApplicantCode
+  p: number
+  g: number
+  w: number
+  m2: number
+  dm2: number
+  m3: number
+}
 
 type MetricCode = "p" | "g" | "w" | "m2"
 type SloopMetricCode = "p" | "g" | "m2" | "m3"
@@ -29,6 +43,20 @@ const SLOOP_METRIC_LABELS: Record<SloopMetricCode, string> = {
   m3: "Gesloopt volume (m³)",
 }
 
+const APPLICANT_NON_SLOOP_METRIC_LABELS = {
+  p: "Projecten",
+  g: "Gebouwen",
+  w: "Wooneenheden",
+  m2: "Nuttige woonoppervlakte (m²)",
+} as const
+
+const APPLICANT_SLOOP_METRIC_LABELS = {
+  p: "Projecten",
+  g: "Gebouwen",
+  dm2: "Gesloopte oppervlakte (m²)",
+  m3: "Gesloopt volume (m³)",
+} as const
+
 let nieuwbouwQuarterly: QuarterlyRow[] = []
 let nieuwbouwYearly: YearlyRow[] = []
 let nieuwbouwByType: TypeRow[] = []
@@ -38,11 +66,27 @@ let verbouwByType: TypeRow[] = []
 let sloopQuarterly: SloopQuarterlyRow[] = []
 let sloopYearly: SloopYearlyRow[] = []
 let sloopByBesluit: SloopBesluitRow[] = []
+let aanvragerYearly: ApplicantRow[] = []
 
 const TYPE_LABELS: Record<string, string> = {
   eengezins: "Eengezinswoning",
   meergezins: "Meergezinswoning",
   kamer: "Kamerwoning",
+}
+
+const HANDELING_LABELS: Record<HandelingCode, string> = {
+  nieuwbouw: "Nieuwbouw",
+  verbouw: "Verbouw",
+  sloop: "Sloop",
+}
+
+const VISIBLE_APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "gemengd"]
+
+const APPLICANT_LABELS: Record<ApplicantCode, string> = {
+  natuurlijk_persoon: "Natuurlijk persoon",
+  rechtspersoon: "Rechtspersoon",
+  gemengd: "Gemengd",
+  andere: "Andere / onbekend",
 }
 
 type ChartPoint = {
@@ -52,10 +96,10 @@ type ChartPoint = {
   formattedValue?: string
 }
 
-type SectionType = "nieuwbouw" | "verbouw" | "sloop"
+type SectionType = "nieuwbouw" | "verbouw" | "sloop" | "aanvrager"
 type ViewType = "chart" | "table"
 type TimeRange = "quarterly" | "yearly"
-type SubView = "total" | "type" | "besluit"
+type SubView = "total" | "type" | "besluit" | "aanvrager" | "share"
 
 function formatInt(n: number) {
   return new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 }).format(n)
@@ -196,12 +240,55 @@ function getSloopData(
   })
 }
 
+function getAanvragerData(
+  metric: ApplicantMetricCode,
+  handeling: HandelingCode,
+  subView: SubView
+): ChartPoint[] {
+  const rows = (aanvragerYearly as ApplicantRow[]).filter((row) => row.h === handeling)
+  const years = [...new Set(rows.map((row) => row.y))].sort((a, b) => a - b)
+
+  if (subView === "share") {
+    return years.flatMap((year) => {
+      const yearRows = rows.filter((row) => row.y === year)
+      const total = yearRows
+        .filter((row) => VISIBLE_APPLICANT_ORDER.includes(row.a))
+        .reduce((sum, row) => sum + row[metric], 0)
+      return VISIBLE_APPLICANT_ORDER.map((applicant, idx) => {
+        const found = yearRows.find((row) => row.a === applicant)
+        const value = found ? found[metric] : 0
+        const share = total > 0 ? (value / total) * 100 : 0
+        return {
+          sortValue: year * 10 + idx,
+          periodCells: [year, APPLICANT_LABELS[applicant]],
+          value: share,
+          formattedValue: `${share.toFixed(1)}%`,
+        }
+      })
+    })
+  }
+
+  return years.flatMap((year) =>
+    VISIBLE_APPLICANT_ORDER.map((applicant, idx) => {
+      const found = rows.find((row) => row.y === year && row.a === applicant)
+      const value = found ? found[metric] : 0
+      return {
+        sortValue: year * 10 + idx,
+        periodCells: [year, APPLICANT_LABELS[applicant]],
+        value,
+        formattedValue: formatInt(value),
+      }
+    })
+  )
+}
+
 interface VergunningenAanvragenEmbedProps {
   section: SectionType
   viewType: ViewType
   metric?: string
   timeRange?: TimeRange
   subView?: SubView
+  handeling?: HandelingCode
 }
 
 export function VergunningenAanvragenEmbed({
@@ -210,6 +297,7 @@ export function VergunningenAanvragenEmbed({
   metric = "w",
   timeRange = "yearly",
   subView = "total",
+  handeling = "nieuwbouw",
 }: VergunningenAanvragenEmbedProps) {
   const { data: bundle, loading, error } = useJsonBundle<{
     nieuwbouwQuarterly: QuarterlyRow[]
@@ -221,6 +309,7 @@ export function VergunningenAanvragenEmbed({
     sloopQuarterly: SloopQuarterlyRow[]
     sloopYearly: SloopYearlyRow[]
     sloopByBesluit: SloopBesluitRow[]
+    aanvragerYearly: ApplicantRow[]
   }>({
     nieuwbouwQuarterly: "/analyses/vergunningen-aanvragen/results/nieuwbouw_quarterly.json",
     nieuwbouwYearly: "/analyses/vergunningen-aanvragen/results/nieuwbouw_yearly.json",
@@ -231,6 +320,7 @@ export function VergunningenAanvragenEmbed({
     sloopQuarterly: "/analyses/vergunningen-aanvragen/results/sloop_quarterly.json",
     sloopYearly: "/analyses/vergunningen-aanvragen/results/sloop_yearly.json",
     sloopByBesluit: "/analyses/vergunningen-aanvragen/results/sloop_by_besluit.json",
+    aanvragerYearly: "/analyses/vergunningen-aanvragen/results/aanvrager_yearly.json",
   })
 
   if (bundle) {
@@ -243,6 +333,7 @@ export function VergunningenAanvragenEmbed({
     sloopQuarterly = bundle.sloopQuarterly
     sloopYearly = bundle.sloopYearly
     sloopByBesluit = bundle.sloopByBesluit
+    aanvragerYearly = bundle.aanvragerYearly
   }
 
   const data = useMemo(() => {
@@ -254,25 +345,42 @@ export function VergunningenAanvragenEmbed({
         return getVerbouwData(metric as MetricCode, timeRange, subView)
       case "sloop":
         return getSloopData(metric as SloopMetricCode, timeRange, subView)
+      case "aanvrager":
+        return getAanvragerData(metric as ApplicantMetricCode, handeling, subView)
     }
-  }, [bundle, section, metric, timeRange, subView])
+  }, [bundle, section, metric, timeRange, subView, handeling])
 
   const title = useMemo(() => {
-    const sectionName = section === "nieuwbouw" ? "Nieuwbouw" : section === "verbouw" ? "Verbouw" : "Sloop"
-    const metricLabel = section === "sloop"
-      ? SLOOP_METRIC_LABELS[metric as SloopMetricCode]
-      : METRIC_LABELS[metric as MetricCode]
+    const sectionName =
+      section === "nieuwbouw"
+        ? "Nieuwbouw"
+        : section === "verbouw"
+          ? "Verbouw"
+          : section === "sloop"
+            ? "Sloop"
+            : "Project Aanvrager Type"
+    const metricLabel =
+      section === "sloop"
+        ? SLOOP_METRIC_LABELS[metric as SloopMetricCode]
+        : section === "aanvrager"
+          ? handeling === "sloop"
+            ? APPLICANT_SLOOP_METRIC_LABELS[metric as keyof typeof APPLICANT_SLOOP_METRIC_LABELS] ?? "Waarde"
+            : APPLICANT_NON_SLOOP_METRIC_LABELS[metric as keyof typeof APPLICANT_NON_SLOOP_METRIC_LABELS] ?? "Waarde"
+          : METRIC_LABELS[metric as MetricCode]
 
     if (subView === "type") return `${sectionName} per woningtype - ${metricLabel}`
     if (subView === "besluit") return `${sectionName} per besluitniveau - ${metricLabel}`
+    if (subView === "aanvrager") return `${sectionName} - ${HANDELING_LABELS[handeling]} - ${metricLabel}`
+    if (subView === "share") return `${sectionName} - ${HANDELING_LABELS[handeling]} - Aandeel (%)`
 
     const timeRangeLabel = timeRange === "yearly" ? "jaarlijks" : "per kwartaal"
     return `${sectionName} ${timeRangeLabel} - ${metricLabel}`
-  }, [section, metric, timeRange, subView])
+  }, [section, metric, timeRange, subView, handeling])
 
   const periodHeaders = useMemo(() => {
     if (subView === "type") return ["Jaar", "Type"]
     if (subView === "besluit") return ["Jaar", "Besluit"]
+    if (subView === "aanvrager" || subView === "share") return ["Jaar", "Aanvrager"]
     if (timeRange === "quarterly") return ["Periode"]
     return ["Jaar"]
   }, [timeRange, subView])
@@ -313,7 +421,13 @@ export function VergunningenAanvragenEmbed({
           label={
             section === "sloop"
               ? SLOOP_METRIC_LABELS[metric as SloopMetricCode]
-              : METRIC_LABELS[metric as MetricCode]
+              : section === "aanvrager"
+                ? subView === "share"
+                  ? "Aandeel (%)"
+                  : handeling === "sloop"
+                    ? APPLICANT_SLOOP_METRIC_LABELS[metric as keyof typeof APPLICANT_SLOOP_METRIC_LABELS] ?? "Waarde"
+                    : APPLICANT_NON_SLOOP_METRIC_LABELS[metric as keyof typeof APPLICANT_NON_SLOOP_METRIC_LABELS] ?? "Waarde"
+                : METRIC_LABELS[metric as MetricCode]
           }
           periodHeaders={periodHeaders}
         />
