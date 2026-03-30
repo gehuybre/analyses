@@ -1044,30 +1044,39 @@ function AanvragerSection() {
       dataSourceUrl="https://omgevingsloketrapportering.omgeving.vlaanderen.be/wonen"
       defaultView="yearly"
       headerContent={
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">{valueLabel} {currentYear}</div>
-              <div className="text-2xl font-bold">{currentYear ? formatInt(currentTotal) : "-"}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">vs {previousYear}</div>
-              <div className={cn("text-2xl font-bold", change >= 0 ? "text-green-600" : "text-red-600")}>
-                {formatPct(change)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="col-span-2 md:col-span-1">
-            <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">Dominant type {currentYear}</div>
-              <div className="text-lg font-bold">
-                {dominantApplicant ? APPLICANT_LABELS[dominantApplicant.a] : "-"}
-              </div>
-              <div className="text-sm text-muted-foreground">{dominantApplicant ? formatPct(dominantShare) : "-"}</div>
-            </CardContent>
-          </Card>
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+            Combinaties van aanvragertypes komen voor, bijvoorbeeld natuurlijk persoon en rechtspersoon samen. Dat wijst
+            vaak op een natuurlijke persoon die in naam van een rechtspersoon indiende, maar dat niet volledig correct in
+            het loket registreerde. Omgekeerd kunnen sommige overheidsinstanties enkel als rechtspersoon geregistreerd
+            zijn. Deze informatie wordt dus weergegeven zoals ze door de aanvragers in het loket werd geregistreerd. De
+            cijfers zijn actueel tot 1 maart 2026.
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-sm text-muted-foreground">{valueLabel} {currentYear}</div>
+                <div className="text-2xl font-bold">{currentYear ? formatInt(currentTotal) : "-"}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-sm text-muted-foreground">vs {previousYear}</div>
+                <div className={cn("text-2xl font-bold", change >= 0 ? "text-green-600" : "text-red-600")}>
+                  {formatPct(change)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="col-span-2 md:col-span-1">
+              <CardContent className="pt-4">
+                <div className="text-sm text-muted-foreground">Dominant type {currentYear}</div>
+                <div className="text-lg font-bold">
+                  {dominantApplicant ? APPLICANT_LABELS[dominantApplicant.a] : "-"}
+                </div>
+                <div className="text-sm text-muted-foreground">{dominantApplicant ? formatPct(dominantShare) : "-"}</div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       }
       rightControls={
