@@ -14,21 +14,60 @@ import pandas as pd
 import json
 from pathlib import Path
 
+def unique_paths(paths):
+    seen = set()
+    ordered = []
+    for path in paths:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        ordered.append(path)
+    return ordered
+
 def write_json(filename, data, **kwargs):
-    """Write JSON to both results directory and public data directory"""
-    with open(RESULTS_DIR / filename, "w") as f:
-        json.dump(data, f, **kwargs)
-    with open(PUBLIC_DATA_DIR / filename, "w") as f:
-        json.dump(data, f, **kwargs)
+    """Write JSON to local results/public directories and the split data repo when available."""
+    for target_dir in RESULT_TARGET_DIRS:
+        with open(target_dir / filename, "w") as f:
+            json.dump(data, f, **kwargs)
+    for target_dir in PUBLIC_TARGET_DIRS:
+        with open(target_dir / filename, "w") as f:
+            json.dump(data, f, **kwargs)
 
 # Paths
-DATA_DIR = Path(__file__).parent.parent / "data"
-RESULTS_DIR = Path(__file__).parent.parent / "results"
+BASE_DIR = Path(__file__).resolve().parent.parent
+EMBUILD_DIR = BASE_DIR.parent.parent
+WORKSPACE_ROOT = EMBUILD_DIR.parent.parent
+DATA_REPO_DIR = WORKSPACE_ROOT / "data"
+
+DATA_DIR = BASE_DIR / "data"
+RESULTS_DIR = BASE_DIR / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 # Also write to public data directory for GitHub Pages
-PUBLIC_DATA_DIR = Path(__file__).parent.parent.parent.parent / "public" / "data" / "vergunningen-aanvragen"
+PUBLIC_DATA_DIR = EMBUILD_DIR / "public" / "data" / "vergunningen-aanvragen"
 PUBLIC_DATA_DIR.mkdir(parents=True, exist_ok=True)
+PUBLIC_RESULTS_DIR = EMBUILD_DIR / "public" / "analyses" / "vergunningen-aanvragen" / "results"
+PUBLIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_REPO_RESULTS_DIRS = [
+    DATA_REPO_DIR / "analyses" / "vergunningen-aanvragen" / "results",
+    DATA_REPO_DIR / "docs" / "analyses" / "vergunningen-aanvragen" / "results",
+]
+DATA_REPO_PUBLIC_DIRS = [
+    DATA_REPO_DIR / "data" / "vergunningen-aanvragen",
+    DATA_REPO_DIR / "docs" / "data" / "vergunningen-aanvragen",
+]
+
+RESULT_TARGET_DIRS = unique_paths(
+    [RESULTS_DIR, PUBLIC_RESULTS_DIR, *DATA_REPO_RESULTS_DIRS] if DATA_REPO_DIR.exists() else [RESULTS_DIR, PUBLIC_RESULTS_DIR]
+)
+PUBLIC_TARGET_DIRS = unique_paths(
+    [PUBLIC_DATA_DIR, *DATA_REPO_PUBLIC_DIRS] if DATA_REPO_DIR.exists() else [PUBLIC_DATA_DIR]
+)
+
+for target_dir in [*RESULT_TARGET_DIRS, *PUBLIC_TARGET_DIRS]:
+    target_dir.mkdir(parents=True, exist_ok=True)
 
 def simplify_handeling(h):
     if h == "Nieuwbouw":
