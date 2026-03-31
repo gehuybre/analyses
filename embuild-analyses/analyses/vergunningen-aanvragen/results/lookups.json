@@ -55,12 +55,8 @@
       "nl": "Natuurlijk persoon"
     },
     {
-      "code": "rechtspersoon",
-      "nl": "Rechtspersoon"
-    },
-    {
-      "code": "overheid",
-      "nl": "Overheid"
+      "code": "overheid_rechtspersoon",
+      "nl": "Overheid / rechtspersoon"
     },
     {
       "code": "andere",

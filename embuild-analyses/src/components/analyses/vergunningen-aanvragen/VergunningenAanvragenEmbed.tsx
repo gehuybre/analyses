@@ -12,7 +12,7 @@ type SloopQuarterlyRow = { y: number; q: number; p: number; g: number; m2: numbe
 type SloopYearlyRow = { y: number; p: number; g: number; m2: number; m3: number }
 type SloopBesluitRow = { y: number; b: string; p: number; g: number; m2: number; m3: number }
 type HandelingCode = "nieuwbouw" | "verbouw" | "sloop"
-type ApplicantCode = "natuurlijk_persoon" | "rechtspersoon" | "overheid" | "andere"
+type ApplicantCode = "natuurlijk_persoon" | "overheid_rechtspersoon" | "andere"
 type ApplicantMetricCode = MetricCode | "dm2" | "m3"
 type ApplicantRow = {
   y: number
@@ -80,12 +80,11 @@ const HANDELING_LABELS: Record<HandelingCode, string> = {
   sloop: "Sloop",
 }
 
-const VISIBLE_APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "overheid"]
+const VISIBLE_APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "overheid_rechtspersoon"]
 
 const APPLICANT_LABELS: Record<ApplicantCode, string> = {
   natuurlijk_persoon: "Natuurlijk persoon",
-  rechtspersoon: "Rechtspersoon",
-  overheid: "Overheid",
+  overheid_rechtspersoon: "Overheid / rechtspersoon",
   andere: "Andere / onbekend",
 }
 
