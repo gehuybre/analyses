@@ -47,7 +47,7 @@ type SloopQuarterlyRow = { y: number; q: number; p: number; g: number; m2: numbe
 type SloopYearlyRow = { y: number; p: number; g: number; m2: number; m3: number }
 type SloopBesluitRow = { y: number; b: string; p: number; g: number; m2: number; m3: number }
 type HandelingCode = "nieuwbouw" | "verbouw" | "sloop"
-type ApplicantCode = "natuurlijk_persoon" | "rechtspersoon" | "gemengd" | "andere"
+type ApplicantCode = "natuurlijk_persoon" | "rechtspersoon" | "overheid" | "andere"
 type ApplicantMetricCode = MetricCode | "dm2" | "m3"
 type ApplicantRow = {
   y: number
@@ -120,20 +120,20 @@ const AANVRAGER_HANDELING_LABELS = {
   verbouw: "Verbouw",
 } as const
 
-const APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "gemengd", "andere"]
-const VISIBLE_APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "gemengd"]
+const APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "overheid", "andere"]
+const VISIBLE_APPLICANT_ORDER: ApplicantCode[] = ["natuurlijk_persoon", "rechtspersoon", "overheid"]
 
 const APPLICANT_COLORS: Record<ApplicantCode, string> = {
   natuurlijk_persoon: "var(--color-chart-1)",
   rechtspersoon: "var(--color-chart-2)",
-  gemengd: "var(--color-chart-3)",
+  overheid: "var(--color-chart-3)",
   andere: "var(--color-chart-4)",
 }
 
 const APPLICANT_LABELS: Record<ApplicantCode, string> = {
   natuurlijk_persoon: "Natuurlijk persoon",
   rechtspersoon: "Rechtspersoon",
-  gemengd: "Gemengd",
+  overheid: "Overheid",
   andere: "Andere / onbekend",
 }
 
@@ -1021,7 +1021,7 @@ function AanvragerSection() {
       jaar: row.jaar as number,
       natuurlijkPersoon: Number(row[APPLICANT_LABELS.natuurlijk_persoon] ?? 0),
       rechtspersoon: Number(row[APPLICANT_LABELS.rechtspersoon] ?? 0),
-      gemengd: Number(row[APPLICANT_LABELS.gemengd] ?? 0),
+      overheid: Number(row[APPLICANT_LABELS.overheid] ?? 0),
       andere: Number(row[APPLICANT_LABELS.andere] ?? 0),
     }))
   }, [yearlyData])
@@ -1031,7 +1031,7 @@ function AanvragerSection() {
       jaar: row.jaar as number,
       natuurlijkPersoon: Number(row[APPLICANT_LABELS.natuurlijk_persoon] ?? 0),
       rechtspersoon: Number(row[APPLICANT_LABELS.rechtspersoon] ?? 0),
-      gemengd: Number(row[APPLICANT_LABELS.gemengd] ?? 0),
+      overheid: Number(row[APPLICANT_LABELS.overheid] ?? 0),
     }))
   }, [shareData])
 
@@ -1121,7 +1121,7 @@ function AanvragerSection() {
                     <Legend iconType="circle" />
                     <Bar dataKey={APPLICANT_LABELS.natuurlijk_persoon} fill={APPLICANT_COLORS.natuurlijk_persoon} stackId="a" />
                     <Bar dataKey={APPLICANT_LABELS.rechtspersoon} fill={APPLICANT_COLORS.rechtspersoon} stackId="a" />
-                    <Bar dataKey={APPLICANT_LABELS.gemengd} fill={APPLICANT_COLORS.gemengd} stackId="a" />
+                    <Bar dataKey={APPLICANT_LABELS.overheid} fill={APPLICANT_COLORS.overheid} stackId="a" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1162,7 +1162,7 @@ function AanvragerSection() {
                     <Legend iconType="circle" />
                     <Bar dataKey={APPLICANT_LABELS.natuurlijk_persoon} fill={APPLICANT_COLORS.natuurlijk_persoon} stackId="a" />
                     <Bar dataKey={APPLICANT_LABELS.rechtspersoon} fill={APPLICANT_COLORS.rechtspersoon} stackId="a" />
-                    <Bar dataKey={APPLICANT_LABELS.gemengd} fill={APPLICANT_COLORS.gemengd} stackId="a" />
+                    <Bar dataKey={APPLICANT_LABELS.overheid} fill={APPLICANT_COLORS.overheid} stackId="a" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1193,7 +1193,7 @@ function AanvragerSection() {
                             <TableHead>Jaar</TableHead>
                             <TableHead className="text-right">Natuurlijk persoon</TableHead>
                             <TableHead className="text-right">Rechtspersoon</TableHead>
-                            <TableHead className="text-right">Gemengd</TableHead>
+                            <TableHead className="text-right">Overheid</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1202,7 +1202,7 @@ function AanvragerSection() {
                               <TableCell className="font-medium">{row.jaar}</TableCell>
                               <TableCell className="text-right">{formatInt(row.natuurlijkPersoon)}</TableCell>
                               <TableCell className="text-right">{formatInt(row.rechtspersoon)}</TableCell>
-                              <TableCell className="text-right">{formatInt(row.gemengd)}</TableCell>
+                              <TableCell className="text-right">{formatInt(row.overheid)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -1218,7 +1218,7 @@ function AanvragerSection() {
                             <TableHead>Jaar</TableHead>
                             <TableHead className="text-right">Natuurlijk persoon</TableHead>
                             <TableHead className="text-right">Rechtspersoon</TableHead>
-                            <TableHead className="text-right">Gemengd</TableHead>
+                            <TableHead className="text-right">Overheid</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1227,7 +1227,7 @@ function AanvragerSection() {
                               <TableCell className="font-medium">{row.jaar}</TableCell>
                               <TableCell className="text-right">{formatShare(row.natuurlijkPersoon)}</TableCell>
                               <TableCell className="text-right">{formatShare(row.rechtspersoon)}</TableCell>
-                              <TableCell className="text-right">{formatShare(row.gemengd)}</TableCell>
+                              <TableCell className="text-right">{formatShare(row.overheid)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

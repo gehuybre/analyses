@@ -81,10 +81,10 @@ def simplify_handeling(h):
 def group_aanvrager(a):
     if a == "Natuurlijk persoon":
         return "natuurlijk_persoon"
-    if a == "Rechtspersoon":
+    if a in {"Rechtspersoon", "Natuurlijk persoon-Rechtspersoon"}:
         return "rechtspersoon"
-    if a == "Natuurlijk persoon-Rechtspersoon":
-        return "gemengd"
+    if a in {"Overheid", "Overheid-Rechtspersoon"}:
+        return "overheid"
     return "andere"
 
 # Read main CSV
@@ -381,7 +381,7 @@ lookups = {
     "aanvrager_types": [
         {"code": "natuurlijk_persoon", "nl": "Natuurlijk persoon"},
         {"code": "rechtspersoon", "nl": "Rechtspersoon"},
-        {"code": "gemengd", "nl": "Natuurlijk persoon + rechtspersoon"},
+        {"code": "overheid", "nl": "Overheid"},
         {"code": "andere", "nl": "Andere / onbekend"}
     ]
 }
