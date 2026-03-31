@@ -48,10 +48,13 @@ type SloopYearlyRow = { y: number; p: number; g: number; m2: number; m3: number 
 type SloopBesluitRow = { y: number; b: string; p: number; g: number; m2: number; m3: number }
 type HandelingCode = "nieuwbouw" | "verbouw" | "sloop"
 type ApplicantCode = "natuurlijk_persoon" | "overheid_rechtspersoon" | "andere"
+type ApplicantFunctionCode = "eengezins" | "meergezins" | "kamer"
+type ApplicantFunctionFilter = "all" | ApplicantFunctionCode
 type ApplicantMetricCode = MetricCode | "dm2" | "m3"
 type ApplicantRow = {
   y: number
   h: HandelingCode
+  t: ApplicantFunctionCode
   a: ApplicantCode
   p: number
   g: number
@@ -107,6 +110,13 @@ const TYPE_LABELS: Record<string, string> = {
   eengezins: "Eengezinswoning",
   meergezins: "Meergezinswoning",
   kamer: "Kamerwoning",
+}
+
+const APPLICANT_FUNCTIE_FILTER_LABELS: Record<ApplicantFunctionFilter, string> = {
+  all: "Alle woningtypes",
+  eengezins: TYPE_LABELS.eengezins,
+  meergezins: TYPE_LABELS.meergezins,
+  kamer: TYPE_LABELS.kamer,
 }
 
 const HANDELING_LABELS: Record<HandelingCode, string> = {
@@ -922,11 +932,15 @@ function VerbouwSection() {
 
 function AanvragerSection() {
   const [handeling, setHandeling] = React.useState<keyof typeof AANVRAGER_HANDELING_LABELS>("nieuwbouw")
+  const [functie, setFunctie] = React.useState<ApplicantFunctionFilter>("all")
   const [metric, setMetric] = React.useState<ApplicantMetricCode>("w")
 
   const rows = React.useMemo(
-    () => (aanvragerYearly as ApplicantRow[]).filter((row) => row.h === handeling),
-    [handeling]
+    () =>
+      (aanvragerYearly as ApplicantRow[]).filter(
+        (row) => row.h === handeling && (functie === "all" || row.t === functie)
+      ),
+    [handeling, functie]
   )
   const visibleRows = React.useMemo(
     () => rows.filter((row) => VISIBLE_APPLICANT_ORDER.includes(row.a)),
@@ -1078,6 +1092,7 @@ function AanvragerSection() {
       rightControls={
         <>
           <MetricSelector selected={handeling} onChange={setHandeling} labels={AANVRAGER_HANDELING_LABELS} />
+          <MetricSelector selected={functie} onChange={setFunctie} labels={APPLICANT_FUNCTIE_FILTER_LABELS} />
           <MetricSelector
             selected={metric as keyof typeof APPLICANT_NON_SLOOP_METRIC_LABELS}
             onChange={(value) => setMetric(value as ApplicantMetricCode)}
@@ -1094,7 +1109,7 @@ function AanvragerSection() {
             viewType: "chart",
             periodHeaders: ["Jaar", "Aanvrager"],
             valueLabel,
-            embedParams: { handeling, metric, timeRange: "yearly", subView: "aanvrager" },
+            embedParams: { handeling, functie: functie === "all" ? null : functie, metric, timeRange: "yearly", subView: "aanvrager" },
           },
           content: (
             <Card>
@@ -1135,7 +1150,7 @@ function AanvragerSection() {
             viewType: "chart",
             periodHeaders: ["Jaar", "Aanvrager"],
             valueLabel: "Aandeel (%)",
-            embedParams: { handeling, metric, timeRange: "yearly", subView: "share" },
+            embedParams: { handeling, functie: functie === "all" ? null : functie, metric, timeRange: "yearly", subView: "share" },
           },
           content: (
             <Card>
@@ -1179,7 +1194,7 @@ function AanvragerSection() {
             viewType: "table",
             periodHeaders: ["Jaar", "Aanvrager"],
             valueLabel,
-            embedParams: { handeling, metric, timeRange: "yearly", subView: "aanvrager" },
+            embedParams: { handeling, functie: functie === "all" ? null : functie, metric, timeRange: "yearly", subView: "aanvrager" },
           },
           content: (
             <Card>

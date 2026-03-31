@@ -178,6 +178,7 @@ df_aanvrager = df_aanvrager[df_aanvrager["jaar"] <= df["jaar"].max()].copy()
 df_aanvrager["gebouw_functie"] = df_aanvrager["gebouw_functie"].replace("-", "Onbekend")
 df_aanvrager["handeling"] = df_aanvrager["handeling"].replace("-", "Onbekend")
 df_aanvrager["aanvrager_type"] = df_aanvrager["aanvrager_type"].replace("-", "Onbekend")
+df_aanvrager["functie_kort"] = df_aanvrager["gebouw_functie"].apply(simplify_functie)
 df_aanvrager["aanvrager_groep"] = df_aanvrager["aanvrager_type"].apply(group_aanvrager)
 
 # ============================================================================
@@ -330,19 +331,20 @@ write_json("sloop_by_besluit.json", [
 
 df_aanvrager_woningen = df_aanvrager[df_aanvrager["gebouw_functie"].isin(woningen_functies)].copy()
 
-aanvrager_yearly = df_aanvrager_woningen.groupby(["jaar", "handeling", "aanvrager_groep"]).agg({
+aanvrager_yearly = df_aanvrager_woningen.groupby(["jaar", "handeling", "functie_kort", "aanvrager_groep"]).agg({
     "aantal_projecten": "sum",
     "aantal_gebouwen": "sum",
     "aantal_wooneenheden": "sum",
     "woonoppervlakte_m2": "sum",
     "gesloopt_m2": "sum",
     "gesloopt_m3": "sum",
-}).reset_index().sort_values(["handeling", "jaar", "aanvrager_groep"])
+}).reset_index().sort_values(["handeling", "jaar", "functie_kort", "aanvrager_groep"])
 
 write_json("aanvrager_yearly.json", [
     {
         "y": int(r["jaar"]),
         "h": simplify_handeling(r["handeling"]),
+        "t": r["functie_kort"],
         "a": r["aanvrager_groep"],
         "p": int(r["aantal_projecten"]),
         "g": int(r["aantal_gebouwen"]),

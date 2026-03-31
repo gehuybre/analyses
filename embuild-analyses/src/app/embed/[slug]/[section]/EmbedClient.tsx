@@ -58,6 +58,8 @@ interface UrlParams {
   metric: string | null
   timeRange: string | null
   subView: string | null
+  handeling: string | null
+  functie: string | null
   showDecline: boolean
   geoLevel: string | null
   chartType: string | null
@@ -71,7 +73,7 @@ interface UrlParams {
 
 function getParamsFromUrl(slug: string): UrlParams {
   if (typeof window === "undefined") {
-    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false, domain: null, field: null, niveau3: null, rekening: null }
+    return { view: "chart", horizon: null, year: null, geo: null, type: null, region: null, province: null, arrondissement: null, municipality: null, sector: null, measure: null, metric: null, timeRange: null, subView: null, handeling: null, functie: null, showDecline: false, geoLevel: null, chartType: null, showMovingAverage: false, showProvinceBoundaries: false, domain: null, field: null, niveau3: null, rekening: null }
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -125,6 +127,8 @@ function getParamsFromUrl(slug: string): UrlParams {
 
   // Sub View (for vergunningen-aanvragen)
   const subView = getParam("subView") || null
+  const handeling = getParam("handeling") || null
+  const functie = getParam("functie") || null
 
   // Show Decline (for huishoudensgroei): allow both explicit boolean and legacy "sector=decline"
   const showDecline = getParam("showDecline") === "true" || sector === "decline"
@@ -164,6 +168,8 @@ function getParamsFromUrl(slug: string): UrlParams {
     metric,
     timeRange,
     subView,
+    handeling,
+    functie,
     showDecline,
     geoLevel,
     chartType,
@@ -202,6 +208,8 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
     metric: null,
     timeRange: null,
     subView: null,
+    handeling: null,
+    functie: null,
     showDecline: false,
     geoLevel: null,
     chartType: null,
@@ -483,15 +491,20 @@ export function EmbedClient({ slug, section }: EmbedClientProps) {
       const timeRange = (urlParams.timeRange as "quarterly" | "yearly") || "yearly"
 
       // Parse subView from URL params (defaults to "total")
-      const subView = (urlParams.subView as "total" | "type" | "besluit") || "total"
+      const subView = (urlParams.subView as "total" | "type" | "besluit" | "aanvrager" | "share")
+        || (section === "aanvrager" ? "aanvrager" : "total")
+      const handeling = (urlParams.handeling as "nieuwbouw" | "verbouw" | "sloop") || "nieuwbouw"
+      const functie = (urlParams.functie as "all" | "eengezins" | "meergezins" | "kamer") || "all"
 
       return (
         <VergunningenAanvragenEmbed
-          section={section as "nieuwbouw" | "verbouw" | "sloop"}
+          section={section as "nieuwbouw" | "verbouw" | "sloop" | "aanvrager"}
           viewType={toChartOrTableViewType(urlParams.view)}
           metric={metric}
           timeRange={timeRange}
           subView={subView}
+          handeling={handeling}
+          functie={functie}
         />
       )
     }

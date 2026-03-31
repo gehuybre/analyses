@@ -297,6 +297,12 @@ export const EMBED_CONFIGS: AnalysisEmbedConfig[] = [
         component: "VergunningenAanvragenEmbed",
         height: 600,
       },
+      aanvrager: {
+        type: "custom",
+        title: "Project Aanvrager Type",
+        component: "VergunningenAanvragenEmbed",
+        height: 600,
+      },
     },
   },
   {
