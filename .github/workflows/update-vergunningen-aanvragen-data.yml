@@ -64,27 +64,52 @@ jobs:
             echo "No changes to commit"
           fi
 
-      - name: Export data to data repository
+      - name: Check data repo token
+        id: data_repo_token
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
         run: |
-          # Clone the data repo with authentication
-          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/gehuybre/data.git data-repo
+          if [ -n "${DATA_REPO_TOKEN}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::warning::DATA_REPO_TOKEN not configured; skipping publish to gehuybre/data."
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+          fi
 
-          # Create directory structure for both locations
+      - name: Checkout data repo
+        if: steps.data_repo_token.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: gehuybre/data
+          path: data-repo
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+
+      - name: Export data to data repository
+        if: steps.data_repo_token.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+
           mkdir -p data-repo/data/vergunningen-aanvragen
+          mkdir -p data-repo/docs/data/vergunningen-aanvragen
           mkdir -p data-repo/analyses/vergunningen-aanvragen/results
+          mkdir -p data-repo/docs/analyses/vergunningen-aanvragen/results
 
-          # Copy the generated data to both locations (from public/data for consistency)
           cp embuild-analyses/public/data/vergunningen-aanvragen/*.json data-repo/data/vergunningen-aanvragen/
-          cp embuild-analyses/public/data/vergunningen-aanvragen/*.json data-repo/analyses/vergunningen-aanvragen/results/
+          cp embuild-analyses/public/data/vergunningen-aanvragen/*.json data-repo/docs/data/vergunningen-aanvragen/
+          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json data-repo/analyses/vergunningen-aanvragen/results/
+          cp embuild-analyses/analyses/vergunningen-aanvragen/results/*.json data-repo/docs/analyses/vergunningen-aanvragen/results/
 
-          # Commit and push to data repo
-          cd data-repo
+      - name: Commit and push data repo changes
+        if: steps.data_repo_token.outputs.available == 'true'
+        working-directory: data-repo
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/vergunningen-aanvragen/
+          git add docs/data/vergunningen-aanvragen/
           git add analyses/vergunningen-aanvragen/results/
+          git add docs/analyses/vergunningen-aanvragen/results/
 
           if ! git diff --staged --quiet; then
             git commit -m "chore(data): update vergunningen-aanvragen data (auto)"
@@ -92,6 +117,5 @@ jobs:
           else
             echo "No changes to commit in data repo"
           fi
-
 
 
