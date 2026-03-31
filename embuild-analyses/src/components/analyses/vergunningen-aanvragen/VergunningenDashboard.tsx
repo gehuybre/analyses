@@ -158,6 +158,16 @@ function formatShare(n: number) {
   return `${n.toFixed(1)}%`
 }
 
+function sumApplicantMetric(
+  rows: ApplicantRow[],
+  applicant: ApplicantCode,
+  metric: ApplicantMetricCode
+) {
+  return rows
+    .filter((row) => row.a === applicant)
+    .reduce((sum, row) => sum + row[metric], 0)
+}
+
 // Metric selector component
 function MetricSelector<T extends string>({
   selected,
@@ -955,18 +965,26 @@ function AanvragerSection() {
   const currentYear = years[years.length - 1] ?? 0
   const previousYear = years[years.length - 2] ?? currentYear - 1
 
-  const currentRows = visibleRows.filter((row) => row.y === currentYear)
-  const previousRows = visibleRows.filter((row) => row.y === previousYear)
+  const currentRows = React.useMemo(() => visibleRows.filter((row) => row.y === currentYear), [visibleRows, currentYear])
+  const previousRows = React.useMemo(
+    () => visibleRows.filter((row) => row.y === previousYear),
+    [visibleRows, previousYear]
+  )
 
   const currentTotal = currentRows.reduce((sum, row) => sum + row[metric], 0)
   const previousTotal = previousRows.reduce((sum, row) => sum + row[metric], 0)
   const change = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : 0
 
-  const dominantApplicant = currentRows.reduce<ApplicantRow | null>((best, row) => {
-    if (!best || row[metric] > best[metric]) return row
-    return best
-  }, null)
-  const dominantShare = dominantApplicant && currentTotal > 0 ? (dominantApplicant[metric] / currentTotal) * 100 : 0
+  const dominantApplicant = React.useMemo(() => {
+    return VISIBLE_APPLICANT_ORDER.reduce<{ a: ApplicantCode; value: number } | null>((best, applicant) => {
+      const value = sumApplicantMetric(currentRows, applicant, metric)
+      if (!best || value > best.value) {
+        return { a: applicant, value }
+      }
+      return best
+    }, null)
+  }, [currentRows, metric])
+  const dominantShare = dominantApplicant && currentTotal > 0 ? (dominantApplicant.value / currentTotal) * 100 : 0
 
   const valueLabel = React.useMemo(() => {
     return APPLICANT_NON_SLOOP_METRIC_LABELS[metric as keyof typeof APPLICANT_NON_SLOOP_METRIC_LABELS] ?? "Waarde"
@@ -974,10 +992,10 @@ function AanvragerSection() {
 
   const yearlyData = React.useMemo(() => {
     return years.map((year) => {
+      const yearRows = rows.filter((entry) => entry.y === year)
       const row: Record<string, string | number> = { jaar: year }
       for (const applicant of APPLICANT_ORDER) {
-        const found = rows.find((entry) => entry.y === year && entry.a === applicant)
-        row[APPLICANT_LABELS[applicant]] = found ? found[metric] : 0
+        row[APPLICANT_LABELS[applicant]] = sumApplicantMetric(yearRows, applicant, metric)
       }
       return row
     })

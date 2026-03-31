@@ -114,6 +114,16 @@ function formatInt(n: number) {
   return new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 }).format(n)
 }
 
+function sumApplicantMetric(
+  rows: ApplicantRow[],
+  applicant: ApplicantCode,
+  metric: ApplicantMetricCode
+) {
+  return rows
+    .filter((row) => row.a === applicant)
+    .reduce((sum, row) => sum + row[metric], 0)
+}
+
 // Nieuwbouw data functions
 function getNieuwbouwData(
   metric: MetricCode,
@@ -267,8 +277,7 @@ function getAanvragerData(
         .filter((row) => VISIBLE_APPLICANT_ORDER.includes(row.a))
         .reduce((sum, row) => sum + row[metric], 0)
       return VISIBLE_APPLICANT_ORDER.map((applicant, idx) => {
-        const found = yearRows.find((row) => row.a === applicant)
-        const value = found ? found[metric] : 0
+        const value = sumApplicantMetric(yearRows, applicant, metric)
         const share = total > 0 ? (value / total) * 100 : 0
         return {
           sortValue: year * 10 + idx,
@@ -282,8 +291,8 @@ function getAanvragerData(
 
   return years.flatMap((year) =>
     VISIBLE_APPLICANT_ORDER.map((applicant, idx) => {
-      const found = rows.find((row) => row.y === year && row.a === applicant)
-      const value = found ? found[metric] : 0
+      const yearRows = rows.filter((row) => row.y === year)
+      const value = sumApplicantMetric(yearRows, applicant, metric)
       return {
         sortValue: year * 10 + idx,
         periodCells: [year, APPLICANT_LABELS[applicant]],
