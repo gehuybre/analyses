@@ -3,7 +3,7 @@
   "latest_period": "2026-01",
   "source_publication_date": "2026-01-31",
   "latest_rate": 3.32,
-  "response_sha256": "56e801b0c69b76c820db42773658a93b419345f70bf1e6c412b9552e1c3d6a3b",
-  "fetched_at": "2026-03-30T06:06:44Z",
+  "response_sha256": "c7c4c455dd3bc68148f827b9c580d4192e83f17e50956bd9df95a04e2d061262",
+  "fetched_at": "2026-03-31T11:33:25Z",
   "observation_count": 133
 }
