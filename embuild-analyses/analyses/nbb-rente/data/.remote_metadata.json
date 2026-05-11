@@ -1,9 +1,9 @@
 {
   "url": "https://nsidisseminate-stat.nbb.be/rest/data/BE2,DF_MIR,1.0/M.R_N.2250.A2C.A_P.Z.Z?startPeriod=2015-01&dimensionAtObservation=AllDimensions",
-  "latest_period": "2026-02",
-  "source_publication_date": "2026-02-28",
-  "latest_rate": 3.35,
-  "response_sha256": "d4b5aaec89c414549c284513c247ef7b5469e2056662c41c318b5eb95057b39c",
-  "fetched_at": "2026-05-04T07:23:48Z",
-  "observation_count": 134
+  "latest_period": "2026-03",
+  "source_publication_date": "2026-03-31",
+  "latest_rate": 3.34,
+  "response_sha256": "10af4443c6cdcd9c7058f3f7487d9c4e92dd2ed864e7c45a8519a93e8bbbde39",
+  "fetched_at": "2026-05-11T07:53:34Z",
+  "observation_count": 135
 }
