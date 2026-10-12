@@ -8,8 +8,8 @@
   "minRate": 1.33,
   "maxRate": 3.6,
   "observationCount": 140,
-  "fetchedAt": "2026-10-05T04:42:39Z",
-  "responseSha256": "1753372b9ed45b82295a7c3d9b98e50be01017bf78643c21b6832931ded0d3ef",
+  "fetchedAt": "2026-10-12T04:40:48Z",
+  "responseSha256": "64b8c990aba1f11f8576596de338f004fdda92eea4505e1b37442ff3e448adab",
   "series": {
     "frequency": "M",
     "item": "R_N",
